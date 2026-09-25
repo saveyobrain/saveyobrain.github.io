@@ -32,24 +32,24 @@ export function renderHub(root: HTMLElement): void {
   });
 
   root.replaceChildren(
-    h("div", { class: "hub-topbar" }, supportLink()),
     h(
-      "main",
-      { class: "hub" },
+      "div",
+      { class: "hub-page" },
+      h("div", { class: "hub-topbar" }, supportLink()),
       h(
-        "header",
-        { class: "hub-header" },
-        h("h1", {}, strings.siteName),
-        h("p", { class: "hub-tagline" }, strings.tagline),
-        h("p", { class: "hub-intro" }, strings.hubIntro),
+        "main",
+        { class: "hub" },
+        h(
+          "header",
+          { class: "hub-header" },
+          h("h1", {}, strings.siteName),
+          h("p", { class: "hub-tagline" }, strings.tagline),
+          h("p", { class: "hub-intro" }, strings.hubIntro),
+        ),
+        h("section", { class: "game-grid" }, ...cards, h("div", { class: "game-card placeholder" }, h("p", {}, strings.comingSoon))),
+        h("p", { class: "hub-note" }, strings.footer),
       ),
-      h("section", { class: "game-grid" }, ...cards, h("div", { class: "game-card placeholder" }, h("p", {}, strings.comingSoon))),
-      h(
-        "footer",
-        { class: "hub-footer" },
-        h("p", {}, strings.footer),
-        h("p", {}, h("a", { href: "#/legal" }, strings.legalLink)),
-      ),
+      h("footer", { class: "site-footer" }, h("a", { href: "#/legal" }, strings.legalLink)),
     ),
   );
 }

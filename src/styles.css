@@ -205,18 +205,33 @@ button {
   font-weight: 700;
 }
 
-.hub-footer {
-  margin-top: 40px;
+.hub-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.hub-page .hub {
+  flex: 1;
+  width: 100%;
+}
+
+.hub-note {
+  margin: 40px 0 0;
   text-align: center;
   font-size: 0.9rem;
   color: var(--ink-soft);
 }
 
-.hub-footer p {
-  margin: 6px 0;
+.site-footer {
+  padding: 16px 20px max(16px, env(safe-area-inset-bottom));
+  text-align: center;
+  font-size: 0.85rem;
 }
 
-.hub-footer a,
+.site-footer a,
 .legal a {
   color: var(--ink-soft);
   font-weight: 700;
