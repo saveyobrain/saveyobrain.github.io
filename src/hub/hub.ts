@@ -1,6 +1,7 @@
 import { GAMES } from "../core/registry";
 import { loadProgress } from "../core/storage";
 import { h } from "../core/ui/dom";
+import { supportLink } from "../core/ui/support";
 import { strings } from "../strings";
 
 export function renderHub(root: HTMLElement): void {
@@ -17,17 +18,21 @@ export function renderHub(root: HTMLElement): void {
       h(
         "div",
         { class: "game-actions" },
-        h(
-          "a",
-          { class: "btn btn-primary", href: playHref },
-          level > 1 ? strings.continueLevel(level, strings.difficulty[progress.difficulty]) : strings.play,
-        ),
+        level > 1
+          ? h(
+              "a",
+              { class: "btn btn-primary btn-continue", href: playHref },
+              h("span", {}, strings.continue),
+              h("span", { class: "btn-sub" }, strings.levelWithDifficulty(level, strings.difficulty[progress.difficulty])),
+            )
+          : h("a", { class: "btn btn-primary", href: playHref }, strings.play),
         level > 1 && h("a", { class: "btn btn-link", href: `${playHref}?level=1` }, strings.startOver),
       ),
     );
   });
 
   root.replaceChildren(
+    h("div", { class: "hub-topbar" }, supportLink()),
     h(
       "main",
       { class: "hub" },
@@ -39,7 +44,12 @@ export function renderHub(root: HTMLElement): void {
         h("p", { class: "hub-intro" }, strings.hubIntro),
       ),
       h("section", { class: "game-grid" }, ...cards, h("div", { class: "game-card placeholder" }, h("p", {}, strings.comingSoon))),
-      h("footer", { class: "hub-footer" }, strings.footer),
+      h(
+        "footer",
+        { class: "hub-footer" },
+        h("p", {}, strings.footer),
+        h("p", {}, h("a", { href: "#/legal" }, strings.legalLink)),
+      ),
     ),
   );
 }

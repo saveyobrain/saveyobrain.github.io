@@ -71,7 +71,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     panel.setEnabled(state === "playing");
   }
 
-  function setupLevel(): void {
+  function setupLevel(withIntro = true): void {
     cfg = levelConfig(level, difficulty);
     maze = generateMaze(cfg.cellsWide, cfg.cellsHigh, cfg.loopChance, rng);
     player = new Player(maze);
@@ -80,14 +80,15 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     attempted = 0;
     feedbackTimer = 0;
     view.setMaze(maze, paletteFor(level));
-    hud.setLevel(`${strings.level(level)} \u00b7 ${strings.difficulty[difficulty]}`);
+    hud.setLevel(strings.levelWithDifficulty(level, strings.difficulty[difficulty]));
     hud.setMeter(candle.fuel);
     hud.setInfo("");
     state = "intro";
     task = undefined;
     nextTask();
     panel.setEnabled(false);
-    showIntro();
+    if (withIntro) showIntro();
+    else play();
   }
 
   function showIntro(): void {
@@ -141,7 +142,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       state = "paused";
       panel.setEnabled(false);
       openModal({
-        title: strings.paused,
+        title: strings.menu,
+        lines: [strings.paused],
         buttons: [
           { label: strings.resume, primary: true, onClick: play },
           { label: strings.restartLevel, onClick: setupLevel },
@@ -192,7 +194,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
           primary: true,
           onClick: () => {
             level++;
-            setupLevel();
+            setupLevel(false);
           },
         },
         { label: strings.backToGames, onClick: ctx.exit },

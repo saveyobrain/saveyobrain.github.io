@@ -3,6 +3,7 @@ import { createRng } from "../src/core/math/rng";
 import { distancesFrom, findPath, generateMaze, isWall } from "../src/games/save-the-light/maze";
 import { levelConfig } from "../src/games/save-the-light/levels";
 import { DIFFICULTIES } from "../src/core/difficulty";
+import { getTier } from "../src/core/math/tiers";
 
 describe("generateMaze", () => {
   for (const [level, difficulty] of [[1, "easy"], [2, "normal"], [5, "hard"], [10, "hardcore"], [20, "normal"], [40, "hardcore"]] as const) {
@@ -72,8 +73,16 @@ describe("levelConfig", () => {
     }
   });
 
-  it("level 1 on easy and normal starts with the simplest math", () => {
-    expect(levelConfig(1, "easy").mathTier).toBe(0);
-    expect(levelConfig(1, "normal").mathTier).toBe(0);
+  it("level 1 math: easy up to 6, normal up to 10, hard up to 15, hardcore up to 20", () => {
+    const addMax = (d: (typeof DIFFICULTIES)[number]) => getTier(levelConfig(1, d).mathTier).addMax;
+    expect(DIFFICULTIES.map(addMax)).toEqual([6, 10, 15, 20]);
+  });
+
+  it("math gets harder every level from normal up, every two levels on easy", () => {
+    for (const d of ["normal", "hard", "hardcore"] as const) {
+      expect(levelConfig(2, d).mathTier).toBe(levelConfig(1, d).mathTier + 1);
+    }
+    expect(levelConfig(2, "easy").mathTier).toBe(0);
+    expect(levelConfig(3, "easy").mathTier).toBe(1);
   });
 });

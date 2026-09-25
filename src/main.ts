@@ -3,6 +3,7 @@ import type { GameInstance } from "./core/game";
 import { findGame } from "./core/registry";
 import { h } from "./core/ui/dom";
 import { renderHub } from "./hub/hub";
+import { renderLegal } from "./hub/legal";
 import { strings } from "./strings";
 
 const app = document.getElementById("app")!;
@@ -18,10 +19,18 @@ async function route(): Promise<void> {
   current?.dispose();
   current = null;
 
-  // Routes: "#/" (hub) and "#/play/<gameId>[?level=N]"
+  // Routes: "#/" (hub), "#/legal" and "#/play/<gameId>[?level=N]"
   const [path, query = ""] = location.hash.replace(/^#/, "").split("?");
   const match = path.match(/^\/play\/([\w-]+)$/);
   const game = match ? findGame(match[1]) : undefined;
+
+  if (path === "/legal") {
+    document.title = `${strings.legalLink} - ${strings.siteName}`;
+    document.body.classList.remove("in-game");
+    renderLegal(app);
+    window.scrollTo(0, 0);
+    return;
+  }
 
   if (!game) {
     document.title = strings.siteName;

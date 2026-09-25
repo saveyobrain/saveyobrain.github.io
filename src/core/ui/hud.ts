@@ -1,5 +1,6 @@
 import { strings } from "../../strings";
 import { h } from "./dom";
+import { supportLink } from "./support";
 
 export interface Hud {
   el: HTMLElement;
@@ -9,15 +10,28 @@ export interface Hud {
   setInfo(text: string): void;
 }
 
-export function createHud(meterIcon: string, onPause: () => void): Hud {
+export function createHud(meterIcon: string, onMenu: () => void): Hud {
   const level = h("div", { class: "hud-level" });
   const fill = h("div", { class: "hud-meter-fill" });
   const meter = h("div", { class: "hud-meter" }, h("span", { class: "hud-meter-icon" }, meterIcon), h("div", { class: "hud-meter-track" }, fill));
   const info = h("div", { class: "hud-info" });
-  const pause = h("button", { class: "hud-pause", type: "button", "aria-label": strings.pause, title: `${strings.pause} (Esc)` }, "\u275A\u275A");
-  pause.addEventListener("click", onPause);
+  const menu = h(
+    "button",
+    { class: "btn hud-menu", type: "button", title: `${strings.menu} (Esc)` },
+    h("span", { class: "hud-menu-icon", "aria-hidden": "true" }, "\u2630"),
+    strings.menu,
+  );
+  menu.addEventListener("click", () => {
+    menu.blur();
+    onMenu();
+  });
 
-  const el = h("div", { class: "hud" }, h("div", { class: "hud-left" }, level, meter, info), pause);
+  const el = h(
+    "div",
+    { class: "hud" },
+    h("div", { class: "hud-left" }, level, meter, info),
+    h("div", { class: "hud-right" }, supportLink("hud-support"), menu),
+  );
 
   return {
     el,

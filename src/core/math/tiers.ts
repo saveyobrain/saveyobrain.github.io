@@ -22,15 +22,17 @@ export const TIERS: readonly Tier[] = [
   { addMax: 6, mulMax: 6, options: 2, kinds: { add: 3, sub: 3, mul: 2, div: 2 } },
   // 2: numbers up to 10
   { addMax: 10, mulMax: 10, options: 2, kinds: { add: 3, sub: 3, mul: 2, div: 2 } },
-  // 3: up to 20, times tables to 10, three options
+  // 3: numbers up to 15
+  { addMax: 15, mulMax: 10, options: 2, kinds: { add: 3, sub: 3, mul: 2, div: 2 } },
+  // 4: up to 20, times tables to 10, three options
   { addMax: 20, mulMax: 10, options: 3, kinds: { add: 3, sub: 3, mul: 3, div: 3 } },
-  // 4: up to 100, times tables to 12
+  // 5: up to 100, times tables to 12
   { addMax: 100, mulMax: 12, options: 3, kinds: { add: 3, sub: 3, mul: 3, div: 3 } },
-  // 5: percentages join, four options
+  // 6: percentages join, four options
   { addMax: 100, mulMax: 12, options: 4, kinds: { add: 2, sub: 2, mul: 2, div: 2, percent: 4 } },
-  // 6: simple equations
+  // 7: simple equations
   { addMax: 100, mulMax: 12, options: 4, kinds: { add: 1, sub: 1, mul: 2, div: 2, percent: 3, equation: 4 } },
-  // 7: everything, including two-step expressions
+  // 8: everything, including two-step expressions
   { addMax: 200, mulMax: 15, options: 4, kinds: { add: 1, sub: 1, mul: 2, div: 2, percent: 3, equation: 3, twoStep: 4 } },
 ];
 

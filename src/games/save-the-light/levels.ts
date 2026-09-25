@@ -33,9 +33,10 @@ interface DifficultyTuning {
 
 const TUNING: Record<Difficulty, DifficultyTuning> = {
   easy: { burn: 1, fuel: 1, penalty: 1, light: 1, extraCells: 0, firstTier: 0, levelsPerTier: 2 },
-  normal: { burn: 1.35, fuel: 0.9, penalty: 1, light: 0.95, extraCells: 1, firstTier: 0, levelsPerTier: 1.5 },
-  hard: { burn: 1.7, fuel: 0.8, penalty: 1.25, light: 0.85, extraCells: 2, firstTier: 1, levelsPerTier: 1.5 },
-  hardcore: { burn: 2.1, fuel: 0.7, penalty: 1.5, light: 0.72, extraCells: 3, firstTier: 2, levelsPerTier: 1 },
+  // firstTier: 1 = numbers up to 10, 2 = up to 15, 3 = up to 20 with three options (see core/math/tiers.ts).
+  normal: { burn: 1.5, fuel: 0.9, penalty: 1, light: 0.95, extraCells: 1, firstTier: 1, levelsPerTier: 1 },
+  hard: { burn: 2, fuel: 0.8, penalty: 1.25, light: 0.85, extraCells: 2, firstTier: 2, levelsPerTier: 1 },
+  hardcore: { burn: 3, fuel: 0.7, penalty: 1.5, light: 0.72, extraCells: 3, firstTier: 3, levelsPerTier: 1 },
 };
 
 export function levelConfig(level: number, difficulty: Difficulty): LevelConfig {
