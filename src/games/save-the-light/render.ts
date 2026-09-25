@@ -3,14 +3,14 @@ import { Camera } from "@babylonjs/core/Cameras/camera";
 import { TargetCamera } from "@babylonjs/core/Cameras/targetCamera";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { CreateDisc } from "@babylonjs/core/Meshes/Builders/discBuilder";
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
-import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { PostProcess } from "@babylonjs/core/PostProcesses/postProcess";
+import { Character } from "./character";
+import { Door } from "./door";
 import { isWall, type Maze, type Tile } from "./maze";
 import { LIGHT_SHADER, LIGHT_UNIFORMS } from "./lightShader";
 
@@ -40,23 +40,6 @@ export function paletteFor(level: number): Palette {
   };
 }
 
-function flatMaterial(scene: Scene, name: string, hex: string): StandardMaterial {
-  const m = new StandardMaterial(name, scene);
-  m.disableLighting = true;
-  m.emissiveColor = Color3.FromHexString(hex);
-  m.backFaceCulling = false;
-  return m;
-}
-
-function disc(scene: Scene, name: string, radius: number, hex: string, parent: TransformNode, z: number): Mesh {
-  const mesh = CreateDisc(name, { radius, tessellation: 40 }, scene);
-  mesh.material = flatMaterial(scene, `${name}-mat`, hex);
-  mesh.parent = parent;
-  mesh.position.z = z;
-  mesh.isPickable = false;
-  return mesh;
-}
-
 /** The camera may scroll this far past the maze edge so the HUD never covers the player. */
 const EDGE_PADDING = 1.5;
 
@@ -67,6 +50,9 @@ function clampAxis(p: number, size: number, view: number): number {
 
 export interface FrameState {
   player: { x: number; y: number };
+  moving: boolean;
+  /** -1 left, 1 right, 0 keep current. */
+  facing: number;
   /** Light radius in tiles. */
   radius: number;
   warmth: number;
@@ -78,9 +64,8 @@ export class MazeView {
   readonly camera: TargetCamera;
   private floor: Mesh | null = null;
   private floorTexture: DynamicTexture | null = null;
-  private readonly playerNode: TransformNode;
-  private readonly flame: Mesh;
-  private readonly exitNode: TransformNode;
+  private readonly character: Character;
+  private readonly door: Door;
   private fog = Color3.FromHexString("#e4e1dc");
   private maze: Maze | null = null;
   private cam = { x: 0, y: 0, viewW: MIN_VISIBLE_TILES, viewH: MIN_VISIBLE_TILES };
@@ -93,21 +78,8 @@ export class MazeView {
     this.camera.minZ = 0.1;
     this.camera.maxZ = 50;
 
-    this.exitNode = new TransformNode("exit", scene);
-    disc(scene, "exit-ring", 0.42, "#2fbf71", this.exitNode, 0.5);
-    disc(scene, "exit-core", 0.28, "#9af0b8", this.exitNode, 0.49);
-    disc(scene, "exit-dot", 0.12, "#ffffff", this.exitNode, 0.48);
-
-    this.playerNode = new TransformNode("player", scene);
-    disc(scene, "player-outline", 0.36, "#ffffff", this.playerNode, 0.2);
-    disc(scene, "player-body", 0.3, "#4f86ec", this.playerNode, 0.19);
-    const candle = CreatePlane("candle", { width: 0.12, height: 0.22 }, scene);
-    candle.material = flatMaterial(scene, "candle-mat", "#fff1d0");
-    candle.parent = this.playerNode;
-    candle.position.set(0, 0.02, 0.18);
-    this.flame = disc(scene, "flame", 0.1, "#ff9d2e", this.playerNode, 0.17);
-    this.flame.position.y = 0.2;
-    disc(scene, "flame-core", 0.055, "#ffe066", this.flame, -0.01);
+    this.door = new Door(scene);
+    this.character = new Character(scene);
 
     const post = new PostProcess("candleLight", LIGHT_SHADER, LIGHT_UNIFORMS, null, 1.0, this.camera);
     post.onApply = (effect) => {
@@ -154,8 +126,12 @@ export class MazeView {
 
     this.floor = floor;
     this.floorTexture = tex;
-    this.exitNode.position.set(maze.exit.x, -maze.exit.y, 0);
+    this.door.setPosition(maze.exit.x, -maze.exit.y);
     this.snapCamera = true;
+  }
+
+  openDoor(): void {
+    this.door.open();
   }
 
   update(dt: number, frame: FrameState): void {
@@ -178,11 +154,9 @@ export class MazeView {
     this.camera.orthoTop = viewH / 2;
     this.camera.orthoBottom = -viewH / 2;
 
-    this.playerNode.position.set(frame.player.x, -frame.player.y, 0);
-    const flicker = 1 + 0.15 * Math.sin(frame.time * 13) * Math.sin(frame.time * 7.3);
-    this.flame.scaling.set(flicker * (1 + frame.warmth * 0.4), (flicker + 0.2) * (1 + frame.warmth * 0.4), 1);
-    const pulse = 1 + 0.08 * Math.sin(frame.time * 4);
-    this.exitNode.scaling.set(pulse, pulse, 1);
+    this.character.root.position.set(frame.player.x, -frame.player.y, 0);
+    this.character.update(dt, frame.time, frame.moving, frame.facing, frame.warmth);
+    this.door.update(dt, frame.time);
 
     this.light = { x: frame.player.x, y: frame.player.y, radius: frame.radius, warmth: frame.warmth, time: frame.time };
   }
@@ -231,6 +205,4 @@ function drawMaze(ctx: CanvasRenderingContext2D, maze: Maze, palette: Palette, t
       }
     }
   }
-  ctx.fillStyle = "rgba(47, 191, 113, 0.25)";
-  ctx.fillRect(maze.exit.x * t + 2, maze.exit.y * t + 2, t - 4, t - 4);
 }

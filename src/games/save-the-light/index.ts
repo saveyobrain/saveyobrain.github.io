@@ -4,7 +4,8 @@ import type { GameContext, GameInstance, GameRuntime, StartOptions } from "../..
 import { createKeyboard, type InputEvent } from "../../core/input";
 import { createRng } from "../../core/math/rng";
 import { generateTask, type MathTask } from "../../core/math/tasks";
-import { loadProgress, saveProgress } from "../../core/storage";
+import { DIFFICULTIES, type Difficulty } from "../../core/difficulty";
+import { loadProgress, updateProgress } from "../../core/storage";
 import { h } from "../../core/ui/dom";
 import { createHud } from "../../core/ui/hud";
 import { showModal, type Modal } from "../../core/ui/modal";
@@ -34,8 +35,10 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
 
   let state: State = "intro";
   let modal: Modal | null = null;
-  let level = options.level ?? loadProgress(GAME_ID).level;
-  let cfg: LevelConfig = levelConfig(level);
+  const saved = loadProgress(GAME_ID);
+  let difficulty: Difficulty = saved.difficulty;
+  let level = options.level ?? saved.levels[difficulty];
+  let cfg: LevelConfig = levelConfig(level, difficulty);
   let maze: Maze;
   let player: Player;
   let candle = new Candle();
@@ -44,6 +47,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   let solved = 0;
   let attempted = 0;
   let time = 0;
+  let winTimeout = 0;
 
   const hud = createHud("\u{1F56F}\uFE0F", () => togglePause());
   stage.append(hud.el);
@@ -68,22 +72,26 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function setupLevel(): void {
-    cfg = levelConfig(level);
+    cfg = levelConfig(level, difficulty);
     maze = generateMaze(cfg.cellsWide, cfg.cellsHigh, cfg.loopChance, rng);
     player = new Player(maze);
-    candle = new Candle();
+    candle = new Candle(cfg.lightScale);
     solved = 0;
     attempted = 0;
     feedbackTimer = 0;
     view.setMaze(maze, paletteFor(level));
-    hud.setLevel(level);
+    hud.setLevel(`${strings.level(level)} \u00b7 ${strings.difficulty[difficulty]}`);
     hud.setMeter(candle.fuel);
     hud.setInfo("");
     state = "intro";
+    task = undefined;
     nextTask();
     panel.setEnabled(false);
+    showIntro();
+  }
 
-    const lines = [t.introGoal, t.exitHint];
+  function showIntro(): void {
+    const lines = [strings.difficultyLine(strings.difficulty[difficulty]), t.introGoal, t.exitHint];
     if (level === 1 || !sessionStorage.getItem("stl-controls-seen")) lines.push(t.controls);
     sessionStorage.setItem("stl-controls-seen", "1");
     openModal({
@@ -91,9 +99,35 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       lines,
       buttons: [
         { label: strings.start, primary: true, onClick: play },
+        { label: strings.selectDifficulty, onClick: showDifficultyPicker },
         { label: strings.backToGames, onClick: ctx.exit },
       ],
     });
+  }
+
+  function showDifficultyPicker(): void {
+    openModal({
+      title: strings.selectDifficulty,
+      choices: DIFFICULTIES.map((d) => ({
+        label: strings.difficulty[d],
+        hint: t.difficultyHints[d],
+        selected: d === difficulty,
+        onClick: () => chooseDifficulty(d),
+      })),
+      buttons: [{ label: strings.back, primary: true, onClick: showIntro }],
+    });
+  }
+
+  function chooseDifficulty(next: Difficulty): void {
+    if (next === difficulty) {
+      showIntro();
+      return;
+    }
+    difficulty = next;
+    level = updateProgress(GAME_ID, (p) => {
+      p.difficulty = next;
+    }).levels[next];
+    setupLevel();
   }
 
   function play(): void {
@@ -129,7 +163,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       candle.add(cfg.fuelPerCorrect);
     } else {
       // Guessing at random should never pay off: the penalty balances the odds.
-      candle.add(-cfg.fuelPerCorrect / (task.options.length - 1));
+      candle.add((-cfg.fuelPerCorrect / (task.options.length - 1)) * cfg.penaltyScale);
     }
     hud.setInfo(`\u2714 ${solved}`);
     panel.showResult(index, correctIndex);
@@ -140,8 +174,15 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   function win(): void {
     state = "won";
     panel.setEnabled(false);
-    const progress = loadProgress(GAME_ID);
-    if (level + 1 > progress.level) saveProgress(GAME_ID, { level: level + 1 });
+    view.openDoor();
+    updateProgress(GAME_ID, (p) => {
+      p.difficulty = difficulty;
+      p.levels[difficulty] = Math.max(p.levels[difficulty], level + 1);
+    });
+    winTimeout = window.setTimeout(showWinCard, 700);
+  }
+
+  function showWinCard(): void {
     openModal({
       title: t.levelComplete,
       lines: attempted > 0 ? [strings.solved(solved, attempted)] : [],
@@ -226,7 +267,14 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       if (state === "playing" && candle.isOut) lose();
     }
     currentRadius = candle.radius(state === "playing" ? dt : 0, time);
-    view.update(dt, { player: player.pos, radius: currentRadius, warmth: candle.flare, time });
+    view.update(dt, {
+      player: player.pos,
+      moving: state === "playing" && player.isMoving,
+      facing: player.facing,
+      radius: currentRadius,
+      warmth: candle.flare,
+      time,
+    });
   }
 
   setupLevel();
@@ -243,6 +291,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
 
   return {
     dispose() {
+      window.clearTimeout(winTimeout);
       document.removeEventListener("visibilitychange", onVisibility);
       canvas.removeEventListener("pointerdown", onPointerDown);
       keyboard.dispose();

@@ -3,7 +3,7 @@ import { h } from "./dom";
 
 export interface Hud {
   el: HTMLElement;
-  setLevel(level: number): void;
+  setLevel(text: string): void;
   /** 0..1 */
   setMeter(value: number): void;
   setInfo(text: string): void;
@@ -21,8 +21,8 @@ export function createHud(meterIcon: string, onPause: () => void): Hud {
 
   return {
     el,
-    setLevel: (n) => {
-      level.textContent = strings.level(n);
+    setLevel: (text) => {
+      level.textContent = text;
     },
     setMeter: (v) => {
       const clamped = Math.max(0, Math.min(1, v));

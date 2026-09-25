@@ -15,6 +15,8 @@ export class Player {
   tile: Tile;
   /** Interpolated position in tile units. */
   pos: { x: number; y: number };
+  /** Last horizontal direction: -1 left, 1 right. */
+  facing = 1;
   private from: Tile | null = null;
   private progress = 0;
   private queued: Direction | null = null;
@@ -88,6 +90,7 @@ export class Player {
       this.path = [];
       return;
     }
+    if (d.x !== 0) this.facing = d.x;
     this.from = { ...this.tile };
     this.tile = { x: nx, y: ny };
     this.progress = 0;

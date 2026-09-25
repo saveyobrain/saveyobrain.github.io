@@ -1,4 +1,5 @@
 import { SITE_NAME } from "./config";
+import type { Difficulty } from "./core/difficulty";
 
 export const strings = {
   siteName: SITE_NAME,
@@ -6,7 +7,7 @@ export const strings = {
   hubIntro:
     "Math is a basic skill, just like reading and writing. Play a little every day to build it up and keep it sharp.",
   play: "Play",
-  continueLevel: (n: number) => `Continue: level ${n}`,
+  continueLevel: (n: number, difficulty: string) => `Continue: level ${n} (${difficulty})`,
   startOver: "Start from level 1",
   comingSoon: "More games coming soon",
   footer: "Free forever. No ads, no accounts. Progress is saved in this browser.",
@@ -24,6 +25,16 @@ export const strings = {
   pressEnter: "(press Enter)",
   solved: (ok: number, total: number) => `Tasks solved: ${ok} of ${total}`,
 
+  difficulty: {
+    easy: "Easy",
+    normal: "Normal",
+    hard: "Hard",
+    hardcore: "Hardcore",
+  } satisfies Record<Difficulty, string>,
+  difficultyLine: (name: string) => `Difficulty: ${name}`,
+  selectDifficulty: "Select difficulty",
+  back: "Back",
+
   stl: {
     title: "Save the Light",
     description:
@@ -34,6 +45,12 @@ export const strings = {
     levelComplete: "You found the exit!",
     candleOut: "Your candle went out...",
     candleOutHint: "Solve tasks as you walk to keep the flame alive.",
-    exitHint: "Look for the glowing green exit.",
+    exitHint: "Look for the door out of the maze.",
+    difficultyHints: {
+      easy: "Small mazes, a slow candle and gentle math.",
+      normal: "Bigger mazes, a faster candle, math grows quicker.",
+      hard: "Large mazes, a quick candle, harder math from the start.",
+      hardcore: "Huge mazes, a tiny flickering light, tough math. Good luck!",
+    } satisfies Record<Difficulty, string>,
   },
 };

@@ -78,11 +78,13 @@ tests/               Vitest unit tests
 
 ## Deployment
 
+Live site: **https://saveyobrain.github.io/**
+
 The GitHub Actions workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) tests, builds and
-publishes to GitHub Pages on every push to `main`.
+publishes to GitHub Pages on every push to `main`. Day-to-day work happens on `dev`; merge into `main` to release.
 
-One-time setup: in the repo settings, go to **Pages** and set **Source: GitHub Actions** (or run
-`gh api repos/<owner>/saveyobrain/pages -X POST -f build_type=workflow`).
-
-- Project site (`https://<owner>.github.io/saveyobrain/`): the workflow builds with `BASE_PATH=/saveyobrain/`.
-- Custom domain: add `public/CNAME` with the domain and change `BASE_PATH` in the workflow to `/`.
+- Pages source is set to **GitHub Actions** in the repo settings.
+- The site is served from the domain root, so the workflow builds with `BASE_PATH=/`. For a project site under a
+  sub-path (`https://<owner>.github.io/<repo>/`), set `BASE_PATH=/<repo>/` instead.
+- Custom domain: set it in **Settings > Pages > Custom domain** and add the DNS records GitHub shows there.
+  With Actions-based deployments no `CNAME` file is needed, and `BASE_PATH` stays `/`.

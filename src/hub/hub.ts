@@ -6,6 +6,7 @@ import { strings } from "../strings";
 export function renderHub(root: HTMLElement): void {
   const cards = GAMES.map((game) => {
     const progress = loadProgress(game.id);
+    const level = progress.levels[progress.difficulty];
     const playHref = `#/play/${game.id}`;
     return h(
       "article",
@@ -16,8 +17,12 @@ export function renderHub(root: HTMLElement): void {
       h(
         "div",
         { class: "game-actions" },
-        h("a", { class: "btn btn-primary", href: playHref }, progress.level > 1 ? strings.continueLevel(progress.level) : strings.play),
-        progress.level > 1 && h("a", { class: "btn btn-link", href: `${playHref}?level=1` }, strings.startOver),
+        h(
+          "a",
+          { class: "btn btn-primary", href: playHref },
+          level > 1 ? strings.continueLevel(level, strings.difficulty[progress.difficulty]) : strings.play,
+        ),
+        level > 1 && h("a", { class: "btn btn-link", href: `${playHref}?level=1` }, strings.startOver),
       ),
     );
   });
