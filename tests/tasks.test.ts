@@ -52,6 +52,19 @@ describe("generateTask", () => {
     }
   });
 
+  it("subtraction never subtracts a number from itself", () => {
+    for (let tierIndex = 0; tierIndex < TIERS.length; tierIndex++) {
+      const rng = createRng(42 + tierIndex);
+      for (let i = 0; i < 2000; i++) {
+        const task = generateTask(tierIndex, rng);
+        if (task.kind !== "sub") continue;
+        const [a, b] = task.text.split(/ [^\d] /).map(Number);
+        expect(a, task.text).toBeGreaterThan(b);
+        expect(task.answer, task.text).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it("is reproducible with the same seed", () => {
     const a = createRng(99);
     const b = createRng(99);

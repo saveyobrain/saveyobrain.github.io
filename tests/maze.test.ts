@@ -56,6 +56,7 @@ describe("levelConfig", () => {
     const b = levelConfig(12, "normal");
     expect(b.cellsWide).toBeGreaterThan(a.cellsWide);
     expect(b.burnPerSecond).toBeGreaterThan(a.burnPerSecond);
+    expect(b.moveBurnPerSecond).toBeGreaterThan(a.moveBurnPerSecond);
     expect(b.mathTier).toBeGreaterThan(a.mathTier);
   });
 
@@ -65,12 +66,41 @@ describe("levelConfig", () => {
       for (let i = 1; i < configs.length; i++) {
         const [prev, cur] = [configs[i - 1], configs[i]];
         expect(cur.burnPerSecond).toBeGreaterThan(prev.burnPerSecond);
+        expect(cur.moveBurnPerSecond).toBeGreaterThan(prev.moveBurnPerSecond);
         expect(cur.fuelPerCorrect).toBeLessThan(prev.fuelPerCorrect);
         expect(cur.cellsWide).toBeGreaterThanOrEqual(prev.cellsWide);
         expect(cur.mathTier).toBeGreaterThanOrEqual(prev.mathTier);
         expect(cur.lightScale).toBeLessThanOrEqual(prev.lightScale);
       }
     }
+  });
+
+  it("moving burns faster than idle on every difficulty", () => {
+    for (const d of DIFFICULTIES) {
+      const cfg = levelConfig(1, d);
+      expect(cfg.moveBurnPerSecond).toBeGreaterThan(cfg.burnPerSecond);
+    }
+  });
+
+  // Player TILES_PER_SECOND in player.ts; min exit distance matches generateMaze tests.
+  const TILES_PER_SECOND = 6.5;
+  const minPathTiles = (cfg: ReturnType<typeof levelConfig>) => cfg.cellsWide + cfg.cellsHigh - 2;
+  const fuelForMinSprint = (cfg: ReturnType<typeof levelConfig>) =>
+    (cfg.moveBurnPerSecond * minPathTiles(cfg)) / TILES_PER_SECOND;
+
+  it("easy L1: a clean shortest-path sprint leaves fuel (discourage)", () => {
+    expect(fuelForMinSprint(levelConfig(1, "easy"))).toBeLessThan(1);
+  });
+
+  it("sprint fuel cost rises with difficulty", () => {
+    const costs = DIFFICULTIES.map((d) => fuelForMinSprint(levelConfig(1, d)));
+    for (let i = 1; i < costs.length; i++) {
+      expect(costs[i]).toBeGreaterThan(costs[i - 1]);
+    }
+  });
+
+  it("hardcore L1: a clean shortest-path sprint empties the candle", () => {
+    expect(fuelForMinSprint(levelConfig(1, "hardcore"))).toBeGreaterThanOrEqual(1);
   });
 
   it("level 1 math: easy up to 6, normal up to 10, hard up to 15, hardcore up to 20", () => {

@@ -48,13 +48,13 @@ export const strings = {
       "Move: arrow keys, WASD, or tap/click inside the light. Answer: keys 1-4 or tap. Menu: Esc.",
     levelComplete: "You found the exit!",
     candleOut: "Your candle went out...",
-    candleOutHint: "Solve tasks as you walk to keep the flame alive.",
+    candleOutHint: "Moving burns the candle faster — pause to solve, or answer as you go.",
     exitHint: "Look for the door out of the maze.",
     difficultyHints: {
-      easy: "Small mazes, a slow candle and gentle math.",
-      normal: "Bigger mazes, a faster candle, math grows quicker.",
-      hard: "Large mazes, a quick candle, harder math from the start.",
-      hardcore: "Huge mazes, a tiny flickering light, tough math. Good luck!",
+      easy: "Small mazes, gentle math. The candle burns faster when you move.",
+      normal: "Bigger mazes, math grows quicker. Rushing without solving will snuff you out.",
+      hard: "Large mazes, harder math from the start. Keep answering or the flame dies.",
+      hardcore: "Huge mazes, a tiny flickering light, tough math. Every step costs you. Good luck!",
     } satisfies Record<Difficulty, string>,
   },
 };
