@@ -257,7 +257,6 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         feedbackTimer -= dt;
         if (feedbackTimer <= 0) nextTask();
       }
-      candle.burn(dt, cfg.burnPerSecond);
       player.update(dt, keyboard.heldDirection(), (tile) => {
         if (tile.x === maze.exit.x && tile.y === maze.exit.y) {
           win();
@@ -265,6 +264,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         }
         return false;
       });
+      candle.burn(dt, player.isMoving ? cfg.moveBurnPerSecond : cfg.burnPerSecond);
       hud.setMeter(candle.fuel);
       if (state === "playing" && candle.isOut) lose();
     }

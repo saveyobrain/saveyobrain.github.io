@@ -42,7 +42,8 @@ function add(t: Tier, r: Rng): RawTask {
 function sub(t: Tier, r: Rng): RawTask {
   const lo = lowBound(t.addMax);
   const a = r.int(Math.max(2, lo), t.addMax);
-  const b = r.int(1, a);
+  // Never a − a (too trivial); b is always strictly less than a.
+  const b = r.int(1, a - 1);
   const d = a - b;
   return { text: `${a} ${MINUS} ${b}`, answer: d, near: [d + 1, d - 1, d + 2, d - 2, ...tens(t, d), a + b] };
 }
