@@ -115,4 +115,21 @@ describe("levelConfig", () => {
     expect(levelConfig(2, "easy").mathTier).toBe(0);
     expect(levelConfig(3, "easy").mathTier).toBe(1);
   });
+
+  it("map unlock uses max(3, ceil(level * coef)) per difficulty", () => {
+    expect(levelConfig(1, "easy").mapUnlockAt).toBe(3);
+    expect(levelConfig(1, "normal").mapUnlockAt).toBe(3);
+    expect(levelConfig(1, "hard").mapUnlockAt).toBe(3); // ceil(2.5)
+    expect(levelConfig(1, "hardcore").mapUnlockAt).toBe(3);
+    expect(levelConfig(4, "easy").mapUnlockAt).toBe(4);
+    expect(levelConfig(4, "normal").mapUnlockAt).toBe(8);
+    expect(levelConfig(4, "hard").mapUnlockAt).toBe(10);
+    expect(levelConfig(4, "hardcore").mapUnlockAt).toBe(12);
+  });
+
+  it("map fog reveal stays disabled for now (arrow aid on all difficulties)", () => {
+    for (const d of DIFFICULTIES) {
+      expect(levelConfig(1, d).mapRevealsFog).toBe(false);
+    }
+  });
 });

@@ -41,7 +41,8 @@ export function createHud(meterIcon: string, onMenu: () => void): Hud {
     setMeter: (v) => {
       const clamped = Math.max(0, Math.min(1, v));
       fill.style.width = `${clamped * 100}%`;
-      meter.classList.toggle("low", clamped < 0.25);
+      meter.classList.toggle("critical", clamped > 0 && clamped < 0.15);
+      meter.classList.toggle("low", clamped >= 0.15 && clamped < 0.25);
     },
     setInfo: (text) => {
       info.textContent = text;

@@ -11,6 +11,7 @@ import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { PostProcess } from "@babylonjs/core/PostProcesses/postProcess";
 import { Character } from "./character";
 import { Door } from "./door";
+import { ExitArrow } from "./exitArrow";
 import { isWall, type Maze, type Tile } from "./maze";
 import { LIGHT_SHADER, LIGHT_UNIFORMS } from "./lightShader";
 
@@ -57,6 +58,12 @@ export interface FrameState {
   radius: number;
   warmth: number;
   time: number;
+  /** Show the decrypted-map compass toward the exit. */
+  showExitArrow?: boolean;
+  /** Lift the candle fog so the whole maze is visible. */
+  revealMap?: boolean;
+  /** Fuel critically low — pulse light and character aura. */
+  criticalFuel?: boolean;
 }
 
 /** Top-down orthographic view of the maze, player, exit and the candle-light post-process. */
@@ -66,11 +73,12 @@ export class MazeView {
   private floorTexture: DynamicTexture | null = null;
   private readonly character: Character;
   private readonly door: Door;
+  private readonly exitArrow: ExitArrow;
   private fog = Color3.FromHexString("#e4e1dc");
   private maze: Maze | null = null;
   private cam = { x: 0, y: 0, viewW: MIN_VISIBLE_TILES, viewH: MIN_VISIBLE_TILES };
   private snapCamera = true;
-  private light = { x: 0, y: 0, radius: 0, warmth: 0, time: 0 };
+  private light = { x: 0, y: 0, radius: 0, warmth: 0, time: 0, reveal: 0, danger: 0 };
 
   constructor(private readonly scene: Scene) {
     this.camera = new TargetCamera("camera", new Vector3(0, 0, -10), scene);
@@ -80,6 +88,7 @@ export class MazeView {
 
     this.door = new Door(scene);
     this.character = new Character(scene);
+    this.exitArrow = new ExitArrow(scene);
 
     const post = new PostProcess("candleLight", LIGHT_SHADER, LIGHT_UNIFORMS, null, 1.0, this.camera);
     post.onApply = (effect) => {
@@ -92,6 +101,8 @@ export class MazeView {
       effect.setColor3("uFog", this.fog);
       effect.setFloat("uTime", this.light.time);
       effect.setFloat("uWarmth", this.light.warmth);
+      effect.setFloat("uReveal", this.light.reveal);
+      effect.setFloat("uDanger", this.light.danger);
     };
   }
 
@@ -127,6 +138,7 @@ export class MazeView {
     this.floor = floor;
     this.floorTexture = tex;
     this.door.setPosition(maze.exit.x, -maze.exit.y);
+    this.exitArrow.setVisible(false);
     this.snapCamera = true;
   }
 
@@ -158,7 +170,19 @@ export class MazeView {
     this.character.update(dt, frame.time, frame.moving, frame.facing, frame.warmth);
     this.door.update(dt, frame.time);
 
-    this.light = { x: frame.player.x, y: frame.player.y, radius: frame.radius, warmth: frame.warmth, time: frame.time };
+    const showArrow = !!frame.showExitArrow;
+    this.exitArrow.setVisible(showArrow);
+    if (showArrow) this.exitArrow.update(frame.player, this.maze.exit);
+
+    this.light = {
+      x: frame.player.x,
+      y: frame.player.y,
+      radius: frame.radius,
+      warmth: frame.warmth,
+      time: frame.time,
+      reveal: frame.revealMap ? 1 : 0,
+      danger: frame.criticalFuel ? 1 : 0,
+    };
   }
 
   /** Tile under a screen point (client coordinates of `canvas`). */
