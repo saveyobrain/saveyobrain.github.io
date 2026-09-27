@@ -1,6 +1,6 @@
 import { strings } from "../../strings";
 import { h } from "./dom";
-import { supportLink } from "./support";
+// import { supportLink } from "./support";
 
 export interface Hud {
   el: HTMLElement;
@@ -30,7 +30,8 @@ export function createHud(meterIcon: string, onMenu: () => void): Hud {
     "div",
     { class: "hud" },
     h("div", { class: "hud-left" }, level, meter, info),
-    h("div", { class: "hud-right" }, supportLink("hud-support"), menu),
+    // Support the project: shown on selected level-complete modals instead of the HUD.
+    h("div", { class: "hud-right" }, /* supportLink("hud-support"), */ menu),
   );
 
   return {

@@ -3,13 +3,70 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Free browser games that help kids and grown-ups build and keep their math skills." />
+    <meta
+      name="description"
+      content="Free browser games that help kids and grown-ups build and keep their math skills."
+    />
     <meta name="theme-color" content="#fff4dc" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕯️</text></svg>" />
-    <title>Save Yo Brain</title>
+    <meta property="og:title" content="Save Yo Brain — Free math games in your browser" />
+    <meta
+      property="og:description"
+      content="Free browser games that help kids and grown-ups build and keep their math skills."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <title>Save Yo Brain — Free math games in your browser</title>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <div class="site-page">
+      <header class="site-header">
+        <a class="site-brand" href="/">
+          <img class="site-logo" src="/logo.svg" width="40" height="40" alt="" />
+          <span class="site-brand-text">Save Yo Brain</span>
+        </a>
+        <button
+          type="button"
+          class="nav-toggle"
+          aria-expanded="false"
+          aria-controls="site-nav"
+          aria-label="Menu"
+        >
+          <span class="nav-toggle-bars" aria-hidden="true"></span>
+        </button>
+        <nav id="site-nav" class="site-nav">
+          <a href="/about/">About</a>
+          <a href="/feedback/">Feedback</a>
+          <!--
+          <a
+            href="https://buymeacoffee.com/saveyobrain"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Support the project</a
+          >
+          -->
+        </nav>
+      </header>
+
+      <main class="site-main hub">
+        <section class="hub-hero">
+          <h1 class="hub-headline">Free games to keep your brain strong.</h1>
+          <p class="hub-intro">
+            Math is a basic skill, just like reading and writing. Play a little every day to build it
+            up and keep it sharp.
+          </p>
+          <p class="hub-hero-cta">
+            <a class="btn btn-primary" href="/games/save-the-light/">Play Save the Light</a>
+          </p>
+        </section>
+
+        <section id="game-grid" class="game-grid" aria-label="Games"></section>
+        <p class="hub-note">Play right away, no account needed. Progress is saved in your browser.</p>
+      </main>
+
+      <footer class="site-footer">
+        <a href="/terms-privacy/">Terms &amp; Privacy</a>
+      </footer>
+    </div>
+    <script type="module" src="/src/pages/home.ts"></script>
   </body>
 </html>

@@ -3,24 +3,20 @@ import type { Difficulty } from "./core/difficulty";
 
 export const strings = {
   siteName: SITE_NAME,
-  tagline: "Free games to keep your brain strong.",
-  hubIntro:
-    "Math is a basic skill, just like reading and writing. Play a little every day to build it up and keep it sharp.",
-  play: "Play",
+  play: "Play now",
   continue: "Continue",
   levelWithDifficulty: (n: number, difficulty: string) => `Level ${n} \u00b7 ${difficulty}`,
   startOver: "Start from level 1",
   comingSoon: "More games coming soon",
-  footer: "Free forever. No ads, no accounts. Progress is saved in this browser.",
-  legalLink: "Terms & Privacy",
   support: "Support the project",
   supportShort: "Support",
+  shareFeedback: "Share your feedback",
 
   menu: "Menu",
   paused: "Game paused",
   resume: "Resume",
   restartLevel: "Restart level",
-  backToGames: "Back to games",
+  backToGames: "Back to home",
 
   level: (n: number) => `Level ${n}`,
   start: "Start",

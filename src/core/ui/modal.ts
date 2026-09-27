@@ -7,7 +7,11 @@ export interface ModalButton {
   primary?: boolean;
   /** Marks the current choice in a list of options. */
   selected?: boolean;
-  onClick(): void;
+  /** If set, renders as a link instead of a button. */
+  href?: string;
+  /** Open href in a new tab (default true for http(s) links). */
+  external?: boolean;
+  onClick?(): void;
 }
 
 export interface ModalOptions {
@@ -24,15 +28,33 @@ export interface Modal {
   close(): void;
 }
 
-function button(b: ModalButton, baseClass: string): HTMLButtonElement {
+function button(b: ModalButton, baseClass: string): HTMLElement {
   const classes = [baseClass, b.primary && "btn-primary", b.selected && "selected"].filter(Boolean).join(" ");
+  const content = [h("span", { class: "btn-label" }, b.label), b.hint && h("span", { class: "btn-hint" }, b.hint)];
+
+  if (b.href) {
+    const external = b.external ?? /^https?:\/\//.test(b.href);
+    const link = h(
+      "a",
+      {
+        class: classes,
+        href: b.href,
+        target: external ? "_blank" : undefined,
+        rel: external ? "noopener noreferrer" : undefined,
+        "aria-pressed": b.selected === undefined ? undefined : String(b.selected),
+      },
+      ...content,
+    );
+    if (b.onClick) link.addEventListener("click", () => b.onClick?.());
+    return link;
+  }
+
   const btn = h(
     "button",
     { class: classes, type: "button", "aria-pressed": b.selected === undefined ? undefined : String(b.selected) },
-    h("span", { class: "btn-label" }, b.label),
-    b.hint && h("span", { class: "btn-hint" }, b.hint),
+    ...content,
   );
-  btn.addEventListener("click", () => b.onClick());
+  btn.addEventListener("click", () => b.onClick?.());
   return btn;
 }
 
@@ -57,7 +79,7 @@ export function showModal(parent: HTMLElement, options: ModalOptions): Modal {
   focusTarget?.focus({ preventScroll: true });
 
   return {
-    confirm: () => (options.buttons.find((b) => b.primary) ?? options.buttons[0])?.onClick(),
+    confirm: () => (options.buttons.find((b) => b.primary) ?? options.buttons[0])?.onClick?.(),
     close: () => el.remove(),
   };
 }
