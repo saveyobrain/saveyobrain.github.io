@@ -6,9 +6,10 @@ import { createRng } from "../../core/math/rng";
 import { generateTask, type MathTask } from "../../core/math/tasks";
 import { DIFFICULTIES, type Difficulty } from "../../core/difficulty";
 import { loadProgress, updateProgress } from "../../core/storage";
+import { SUPPORT_URL } from "../../config";
 import { h } from "../../core/ui/dom";
 import { createHud } from "../../core/ui/hud";
-import { showModal, type Modal } from "../../core/ui/modal";
+import { showModal, type Modal, type ModalButton } from "../../core/ui/modal";
 import { createTaskPanel } from "../../core/ui/taskPanel";
 import { strings } from "../../strings";
 import { Candle } from "./candle";
@@ -22,6 +23,24 @@ const FEEDBACK_CORRECT_SECONDS = 0.45;
 const FEEDBACK_WRONG_SECONDS = 1.2;
 /** Fuel fraction that triggers critical light/HUD pulse. */
 const CRITICAL_FUEL = 0.15;
+
+/** After completing these levels (and every 3rd level from 15 onward), offer Support. */
+function showSupportAfterLevel(n: number): boolean {
+  if (n === 3 || n === 7 || n === 10) return true;
+  return n >= 15 && (n - 15) % 3 === 0;
+}
+
+function feedbackButton(): ModalButton {
+  return {
+    label: strings.shareFeedback,
+    href: `${import.meta.env.BASE_URL}feedback/`,
+    external: false,
+  };
+}
+
+function supportButton(): ModalButton {
+  return { label: strings.support, href: SUPPORT_URL, external: true };
+}
 
 type State = "intro" | "playing" | "paused" | "won" | "lost";
 type MapPhase = "none" | "found" | "decrypted";
@@ -174,6 +193,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         buttons: [
           { label: strings.resume, primary: true, onClick: play },
           { label: strings.restartLevel, onClick: setupLevel },
+          feedbackButton(),
           { label: strings.backToGames, onClick: ctx.exit },
         ],
       });
@@ -233,20 +253,24 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function showWinCard(): void {
+    const buttons: ModalButton[] = [
+      {
+        label: strings.nextLevel,
+        primary: true,
+        onClick: () => {
+          level++;
+          setupLevel(false);
+        },
+      },
+      feedbackButton(),
+    ];
+    if (showSupportAfterLevel(level)) buttons.push(supportButton());
+    buttons.push({ label: strings.backToGames, onClick: ctx.exit });
+
     openModal({
       title: t.levelComplete,
       lines: attempted > 0 ? [strings.solved(solved, attempted)] : [],
-      buttons: [
-        {
-          label: strings.nextLevel,
-          primary: true,
-          onClick: () => {
-            level++;
-            setupLevel(false);
-          },
-        },
-        { label: strings.backToGames, onClick: ctx.exit },
-      ],
+      buttons,
     });
   }
 
@@ -258,6 +282,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       lines: [t.candleOutHint],
       buttons: [
         { label: strings.tryAgain, primary: true, onClick: setupLevel },
+        feedbackButton(),
         { label: strings.backToGames, onClick: ctx.exit },
       ],
     });

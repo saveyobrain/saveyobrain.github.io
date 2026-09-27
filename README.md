@@ -19,6 +19,21 @@ Principles:
   numbers, percentages and equations with up to four options.
 - **Bright and friendly,** never dark or scary.
 
+## Site pages
+
+| URL | Page |
+| --- | --- |
+| `/` | Home — games list |
+| `/about/` | About |
+| `/feedback/` | Feedback (Google Form) |
+| `/terms-privacy/` | Terms & Privacy |
+| `/games/save-the-light/` | Save the Light |
+| `/404.html` | Not found (served by GitHub Pages for unknown paths) |
+
+Editable content (About, Feedback, Terms & Privacy) lives in Markdown under [`content/`](content/) with YAML
+frontmatter for title and description. The Vite plugin in [`vite/contentPagesPlugin.ts`](vite/contentPagesPlugin.ts)
+turns those files into static HTML with shared chrome and meta tags.
+
 ## Games
 
 | Game | Idea |
@@ -45,36 +60,42 @@ npm run build     # production build into dist/
 npm run preview   # serve the production build locally
 ```
 
-Tech: [Vite](https://vite.dev/), TypeScript and [Babylon.js](https://www.babylonjs.com/). The UI is plain HTML/CSS
-over the canvas. Babylon.js is only downloaded when a game is opened, so the hub page loads instantly.
+Tech: [Vite](https://vite.dev/) multi-page app, TypeScript and [Babylon.js](https://www.babylonjs.com/).
+Babylon.js is only downloaded on the game page, so the rest of the site stays light.
 
 ### Project layout
 
 ```
+content/                 Markdown pages (frontmatter + body)
+public/logo.svg          Brand mark
+index.html               Home
+games/save-the-light/    Game HTML entry
+vite/                    Content → HTML plugin and shared chrome
 src/
-  main.ts            hash router: #/ (hub) and #/play/<gameId>
-  config.ts          site name (working title)
-  strings.ts         all UI text (English)
-  hub/               game list page
-  core/
-    game.ts          GameModule interface every game implements
-    registry.ts      list of games shown in the hub
-    math/            shared task generator and difficulty tiers
-    ui/              task panel, HUD, modal cards
-    input.ts         keyboard mapping (arrows/WASD, 1-4, Esc, Enter)
-    storage.ts       progress saved in localStorage
-    engine.ts        Babylon engine/scene setup
-  games/
-    save-the-light/  maze, player, candle, rendering, level progression
-tests/               Vitest unit tests
+  pages/                 Home and game entry scripts
+  site/                  Nav + legacy hash redirects
+  hub/                   Game card grid for the home page
+  config.ts              Site name, support URL, feedback form URL
+  strings.ts             UI text (English)
+  core/                  Shared game engine pieces
+  games/save-the-light/  Maze game implementation
+tests/
 ```
+
+### Adding a new content page
+
+1. Add `content/<slug>.md` with `title` / `description` frontmatter.
+2. Register it in `PAGES` inside [`vite/contentPagesPlugin.ts`](vite/contentPagesPlugin.ts).
+3. Add the output path to `build.rollupOptions.input` via `contentPageInputs` (or extend that helper).
+4. Link it from the header or footer in [`vite/siteChrome.ts`](vite/siteChrome.ts) and [`index.html`](index.html).
 
 ### Adding a new game
 
 1. Create `src/games/<game-id>/index.ts` that exports a `runtime` implementing `GameRuntime` from
    [`src/core/game.ts`](src/core/game.ts).
 2. Add an entry to `GAMES` in [`src/core/registry.ts`](src/core/registry.ts) with a lazy `load()` import.
-3. Reuse `core/math` for tasks, `core/ui` for the task panel/HUD/menus and `core/storage` for progress.
+3. Add `games/<game-id>/index.html` and a small page script (see [`src/pages/game.ts`](src/pages/game.ts)).
+4. Register the HTML in [`vite.config.ts`](vite.config.ts) `rollupOptions.input`.
 
 ## Deployment
 

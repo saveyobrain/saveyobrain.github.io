@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-hidden="true">
+  <!-- Cookie body -->
+  <circle cx="32" cy="32" r="26" fill="#e8a85a" stroke="#c47a2e" stroke-width="2.5"/>
+  <!-- Soft highlight -->
+  <ellipse cx="24" cy="22" rx="10" ry="7" fill="#f0c07a" opacity="0.7"/>
+  <!-- Chocolate chips -->
+  <circle cx="22" cy="30" r="4.2" fill="#5c3a22"/>
+  <circle cx="38" cy="24" r="3.6" fill="#4a2e1a"/>
+  <circle cx="42" cy="40" r="4" fill="#5c3a22"/>
+  <circle cx="28" cy="44" r="3.2" fill="#4a2e1a"/>
+  <circle cx="34" cy="34" r="2.6" fill="#6b4423"/>
+  <!-- Tiny smile -->
+  <path d="M26 50c3 3 9 3 12 0" fill="none" stroke="#c47a2e" stroke-width="1.8" stroke-linecap="round"/>
+</svg>

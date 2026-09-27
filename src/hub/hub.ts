@@ -1,14 +1,15 @@
 import { GAMES } from "../core/registry";
 import { loadProgress } from "../core/storage";
 import { h } from "../core/ui/dom";
-import { supportLink } from "../core/ui/support";
 import { strings } from "../strings";
 
-export function renderHub(root: HTMLElement): void {
+/** Fills `#game-grid` with game cards (Continue / Play from local progress). */
+export function renderGameGrid(root: HTMLElement): void {
+  const base = import.meta.env.BASE_URL;
   const cards = GAMES.map((game) => {
     const progress = loadProgress(game.id);
     const level = progress.levels[progress.difficulty];
-    const playHref = `#/play/${game.id}`;
+    const playHref = `${base}games/${game.id}/`;
     return h(
       "article",
       { class: "game-card", style: `--accent: ${game.color}` },
@@ -31,25 +32,5 @@ export function renderHub(root: HTMLElement): void {
     );
   });
 
-  root.replaceChildren(
-    h(
-      "div",
-      { class: "hub-page" },
-      h("div", { class: "hub-topbar" }, supportLink()),
-      h(
-        "main",
-        { class: "hub" },
-        h(
-          "header",
-          { class: "hub-header" },
-          h("h1", {}, strings.siteName),
-          h("p", { class: "hub-tagline" }, strings.tagline),
-          h("p", { class: "hub-intro" }, strings.hubIntro),
-        ),
-        h("section", { class: "game-grid" }, ...cards, h("div", { class: "game-card placeholder" }, h("p", {}, strings.comingSoon))),
-        h("p", { class: "hub-note" }, strings.footer),
-      ),
-      h("footer", { class: "site-footer" }, h("a", { href: "#/legal" }, strings.legalLink)),
-    ),
-  );
+  root.replaceChildren(...cards, h("div", { class: "game-card placeholder" }, h("p", {}, strings.comingSoon)));
 }
