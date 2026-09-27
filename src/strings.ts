@@ -26,6 +26,7 @@ export const strings = {
   start: "Start",
   nextLevel: "Next level",
   tryAgain: "Try again",
+  ok: "OK",
   pressEnter: "(press Enter)",
   solved: (ok: number, total: number) => `Tasks solved: ${ok} of ${total}`,
 
@@ -42,7 +43,7 @@ export const strings = {
   stl: {
     title: "Save the Light",
     description:
-      "Find the exit of a dark maze. Solve math tasks to keep your candle burning!",
+      "Find the exit of a maze. Solve math tasks to keep your candle burning!",
     introGoal: "Find the exit. Solve tasks to keep your candle burning!",
     controls:
       "Move: arrow keys, WASD, or tap/click inside the light. Answer: keys 1-4 or tap. Menu: Esc.",
@@ -50,6 +51,12 @@ export const strings = {
     candleOut: "Your candle went out...",
     candleOutHint: "Moving burns the candle faster — pause to solve, or answer as you go.",
     exitHint: "Look for the door out of the maze.",
+    exitLocked: "The door is locked.",
+    exitLockedHint: "Solve at least one math task to open the door.",
+    mapFound: "You found a map!",
+    mapFoundHint: "Solve one more task to decrypt it.",
+    mapDecryptedArrow: "Map decrypted — follow the arrow to the exit.",
+    mapDecryptedReveal: "Map decrypted — the maze is revealed!",
     difficultyHints: {
       easy: "Small mazes, gentle math. The candle burns faster when you move.",
       normal: "Bigger mazes, math grows quicker. Rushing without solving will snuff you out.",

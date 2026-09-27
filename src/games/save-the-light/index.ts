@@ -20,8 +20,11 @@ import { MazeView, paletteFor } from "./render";
 const GAME_ID = "save-the-light";
 const FEEDBACK_CORRECT_SECONDS = 0.45;
 const FEEDBACK_WRONG_SECONDS = 1.2;
+/** Fuel fraction that triggers critical light/HUD pulse. */
+const CRITICAL_FUEL = 0.15;
 
 type State = "intro" | "playing" | "paused" | "won" | "lost";
+type MapPhase = "none" | "found" | "decrypted";
 
 function start(ctx: GameContext, options: StartOptions): GameInstance {
   const t = strings.stl;
@@ -48,6 +51,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   let attempted = 0;
   let time = 0;
   let winTimeout = 0;
+  let mapPhase: MapPhase = "none";
 
   const hud = createHud("\u{1F56F}\uFE0F", () => togglePause());
   stage.append(hud.el);
@@ -71,6 +75,10 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     panel.setEnabled(state === "playing");
   }
 
+  function isOnExit(): boolean {
+    return player.tile.x === maze.exit.x && player.tile.y === maze.exit.y;
+  }
+
   function setupLevel(withIntro = true): void {
     cfg = levelConfig(level, difficulty);
     maze = generateMaze(cfg.cellsWide, cfg.cellsHigh, cfg.loopChance, rng);
@@ -79,6 +87,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     solved = 0;
     attempted = 0;
     feedbackTimer = 0;
+    mapPhase = "none";
     view.setMaze(maze, paletteFor(level));
     hud.setLevel(strings.levelWithDifficulty(level, strings.difficulty[difficulty]));
     hud.setMeter(candle.fuel);
@@ -137,6 +146,24 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     panel.setEnabled(feedbackTimer <= 0);
   }
 
+  function pauseForInfo(title: string, lines: string[]): void {
+    state = "paused";
+    panel.setEnabled(false);
+    openModal({
+      title,
+      lines,
+      buttons: [{ label: strings.ok, primary: true, onClick: play }],
+    });
+  }
+
+  function showExitGate(): void {
+    pauseForInfo(t.exitLocked, [t.exitLockedHint]);
+  }
+
+  function showMapFound(): void {
+    pauseForInfo(t.mapFound, [t.mapFoundHint]);
+  }
+
   function togglePause(): void {
     if (state === "playing") {
       state = "paused";
@@ -155,6 +182,22 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     }
   }
 
+  function mapDecryptedInfo(): string {
+    return cfg.mapRevealsFog ? t.mapDecryptedReveal : t.mapDecryptedArrow;
+  }
+
+  function advanceMapOnSolve(): void {
+    if (mapPhase === "found") {
+      mapPhase = "decrypted";
+      hud.setInfo(mapDecryptedInfo());
+      return;
+    }
+    if (mapPhase === "none" && solved >= cfg.mapUnlockAt) {
+      mapPhase = "found";
+      showMapFound();
+    }
+  }
+
   function answer(index: number): void {
     if (state !== "playing" || feedbackTimer > 0 || !task || index >= task.options.length) return;
     const correctIndex = task.options.indexOf(task.answer);
@@ -163,11 +206,16 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     if (correct) {
       solved++;
       candle.add(cfg.fuelPerCorrect);
+      if (isOnExit()) {
+        win();
+        return;
+      }
+      advanceMapOnSolve();
     } else {
       // Guessing at random should never pay off: the penalty balances the odds.
       candle.add((-cfg.fuelPerCorrect / (task.options.length - 1)) * cfg.penaltyScale);
     }
-    hud.setInfo(`\u2714 ${solved}`);
+    hud.setInfo(mapPhase === "decrypted" ? mapDecryptedInfo() : `\u2714 ${solved}`);
     panel.showResult(index, correctIndex);
     panel.setEnabled(false);
     feedbackTimer = correct ? FEEDBACK_CORRECT_SECONDS : FEEDBACK_WRONG_SECONDS;
@@ -216,6 +264,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function isLit(x: number, y: number, radius: number): boolean {
+    if (mapPhase === "decrypted" && cfg.mapRevealsFog) return true;
     const dx = x - player.pos.x;
     const dy = y - player.pos.y;
     return dx * dx + dy * dy <= radius * radius;
@@ -259,6 +308,10 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       }
       player.update(dt, keyboard.heldDirection(), (tile) => {
         if (tile.x === maze.exit.x && tile.y === maze.exit.y) {
+          if (solved < 1) {
+            showExitGate();
+            return true;
+          }
           win();
           return true;
         }
@@ -269,6 +322,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       if (state === "playing" && candle.isOut) lose();
     }
     currentRadius = candle.radius(state === "playing" ? dt : 0, time);
+    const criticalFuel = candle.fuel > 0 && candle.fuel < CRITICAL_FUEL;
     view.update(dt, {
       player: player.pos,
       moving: state === "playing" && player.isMoving,
@@ -276,6 +330,9 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       radius: currentRadius,
       warmth: candle.flare,
       time,
+      showExitArrow: mapPhase === "decrypted" && !cfg.mapRevealsFog,
+      revealMap: mapPhase === "decrypted" && cfg.mapRevealsFog,
+      criticalFuel,
     });
   }
 

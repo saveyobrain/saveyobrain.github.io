@@ -381,9 +381,29 @@ button {
   animation: blink 0.6s ease-in-out infinite alternate;
 }
 
+.hud-meter.critical {
+  animation: meter-panic 0.45s ease-in-out infinite alternate;
+}
+
+.hud-meter.critical .hud-meter-fill {
+  background: linear-gradient(90deg, #c41010, #ff4d4d);
+  animation: blink 0.35s ease-in-out infinite alternate;
+}
+
 @keyframes blink {
   to {
     opacity: 0.45;
+  }
+}
+
+@keyframes meter-panic {
+  from {
+    box-shadow: 0 0 0 0 rgba(220, 40, 40, 0.15), 0 2px 8px rgba(80, 60, 20, 0.12);
+    background: rgba(255, 230, 230, 0.92);
+  }
+  to {
+    box-shadow: 0 0 0 4px rgba(220, 40, 40, 0.55), 0 2px 10px rgba(180, 20, 20, 0.25);
+    background: rgba(255, 200, 200, 0.95);
   }
 }
 
