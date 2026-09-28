@@ -29,9 +29,14 @@ export function createHud(meterIcon: string, onMenu: () => void): Hud {
   const el = h(
     "div",
     { class: "hud" },
-    h("div", { class: "hud-left" }, level, meter, info),
-    // Support the project: shown on selected level-complete modals instead of the HUD.
-    h("div", { class: "hud-right" }, /* supportLink("hud-support"), */ menu),
+    h(
+      "div",
+      { class: "hud-top" },
+      h("div", { class: "hud-left" }, level),
+      // Support the project: shown on selected level-complete modals instead of the HUD.
+      h("div", { class: "hud-right" }, /* supportLink("hud-support"), */ menu),
+    ),
+    h("div", { class: "hud-bottom-left" }, meter, info),
   );
 
   return {
@@ -42,8 +47,8 @@ export function createHud(meterIcon: string, onMenu: () => void): Hud {
     setMeter: (v) => {
       const clamped = Math.max(0, Math.min(1, v));
       fill.style.width = `${clamped * 100}%`;
-      meter.classList.toggle("critical", clamped > 0 && clamped < 0.15);
-      meter.classList.toggle("low", clamped >= 0.15 && clamped < 0.25);
+      meter.classList.toggle("critical", clamped > 0 && clamped < 0.25);
+      meter.classList.toggle("low", clamped >= 0.25 && clamped < 0.5);
     },
     setInfo: (text) => {
       info.textContent = text;

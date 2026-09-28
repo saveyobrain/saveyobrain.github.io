@@ -31,35 +31,40 @@ function tens(t: Tier, v: number): number[] {
   return t.addMax >= 20 ? [v + 10, v - 10] : [];
 }
 
-function add(t: Tier, r: Rng): RawTask {
-  const lo = lowBound(t.addMax);
+function add(t: Tier, r: Rng, allowTrivial: boolean): RawTask {
+  const lo = allowTrivial ? lowBound(t.addMax) : Math.max(2, lowBound(t.addMax));
   const a = r.int(lo, t.addMax);
   const b = r.int(lo, t.addMax);
   const s = a + b;
   return { text: `${a} ${PLUS} ${b}`, answer: s, near: [s + 1, s - 1, s + 2, s - 2, ...tens(t, s), Math.abs(a - b)] };
 }
 
-function sub(t: Tier, r: Rng): RawTask {
+function sub(t: Tier, r: Rng, allowTrivial: boolean): RawTask {
   const lo = lowBound(t.addMax);
-  const a = r.int(Math.max(2, lo), t.addMax);
+  const minB = allowTrivial ? 1 : 2;
+  const a = r.int(Math.max(minB + 1, lo), t.addMax);
   // Never a − a (too trivial); b is always strictly less than a.
-  const b = r.int(1, a - 1);
+  const b = r.int(minB, a - 1);
   const d = a - b;
   return { text: `${a} ${MINUS} ${b}`, answer: d, near: [d + 1, d - 1, d + 2, d - 2, ...tens(t, d), a + b] };
 }
 
-function mul(t: Tier, r: Rng): RawTask {
+function mul(t: Tier, r: Rng, allowTrivial: boolean): RawTask {
   const lo = t.mulMax >= 10 ? 2 : 1;
-  const a = r.int(lo, t.mulMax);
-  const b = r.int(lo, t.mulMax);
+  // Avoid ×1 unless trivial tasks are allowed.
+  const minOp = allowTrivial ? lo : Math.max(2, lo);
+  const a = r.int(minOp, t.mulMax);
+  const b = r.int(minOp, t.mulMax);
   const p = a * b;
   return { text: `${a} ${TIMES} ${b}`, answer: p, near: [p + a, p - a, p + b, p - b, a + b, p + 1, p - 1] };
 }
 
-function div(t: Tier, r: Rng): RawTask {
+function div(t: Tier, r: Rng, allowTrivial: boolean): RawTask {
   const lo = t.mulMax >= 10 ? 2 : 1;
-  const b = r.int(lo, t.mulMax);
-  const q = r.int(lo, t.mulMax);
+  // Avoid n ÷ n (quotient 1) and n ÷ 1 unless trivial tasks are allowed.
+  const minOp = allowTrivial ? lo : Math.max(2, lo);
+  const b = r.int(minOp, t.mulMax);
+  const q = r.int(minOp, t.mulMax);
   const a = b * q;
   return { text: `${a} ${DIVIDE} ${b}`, answer: q, near: [q + 1, q - 1, q + 2, q - 2, a - b, b] };
 }
@@ -137,14 +142,14 @@ function twoStep(_t: Tier, r: Rng): RawTask {
   }
 }
 
-const GENERATORS: Record<TaskKind, (t: Tier, r: Rng) => RawTask> = {
-  add,
-  sub,
-  mul,
-  div,
-  percent,
-  equation,
-  twoStep,
+const GENERATORS: Record<TaskKind, (t: Tier, r: Rng, allowTrivial: boolean) => RawTask> = {
+  add: (t, r, trivial) => add(t, r, trivial),
+  sub: (t, r, trivial) => sub(t, r, trivial),
+  mul: (t, r, trivial) => mul(t, r, trivial),
+  div: (t, r, trivial) => div(t, r, trivial),
+  percent: (t, r) => percent(t, r),
+  equation: (t, r) => equation(t, r),
+  twoStep: (t, r) => twoStep(t, r),
 };
 
 function pickKind(tier: Tier, r: Rng): TaskKind {
@@ -177,11 +182,22 @@ function buildOptions(raw: RawTask, count: number, r: Rng): number[] {
   return r.shuffle([raw.answer, ...wrong]);
 }
 
-export function generateTask(tierIndex: number, rng: Rng, previous?: MathTask): MathTask {
+export interface GenerateTaskOptions {
+  /** Allow ±1, ×1, and n÷n style tasks (Easy level 1 only). */
+  allowTrivial?: boolean;
+}
+
+export function generateTask(
+  tierIndex: number,
+  rng: Rng,
+  previous?: MathTask,
+  options: GenerateTaskOptions = {},
+): MathTask {
   const tier = getTier(tierIndex);
+  const allowTrivial = options.allowTrivial === true;
   for (let attempt = 0; ; attempt++) {
     const kind = pickKind(tier, rng);
-    const raw = GENERATORS[kind](tier, rng);
+    const raw = GENERATORS[kind](tier, rng, allowTrivial);
     if (attempt < 10 && previous && previous.text === raw.text) continue;
     return { kind, text: raw.text, answer: raw.answer, options: buildOptions(raw, tier.options, rng) };
   }

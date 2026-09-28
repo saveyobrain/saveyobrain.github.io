@@ -11,7 +11,7 @@ import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { PostProcess } from "@babylonjs/core/PostProcesses/postProcess";
 import { Character } from "./character";
 import { Door } from "./door";
-import { ExitArrow } from "./exitArrow";
+import { ExitPath } from "./exitPath";
 import { isWall, type Maze, type Tile } from "./maze";
 import { LIGHT_SHADER, LIGHT_UNIFORMS } from "./lightShader";
 
@@ -58,8 +58,10 @@ export interface FrameState {
   radius: number;
   warmth: number;
   time: number;
-  /** Show the decrypted-map compass toward the exit. */
-  showExitArrow?: boolean;
+  /** Show the decrypted-map dotted path toward the exit. */
+  showExitPath?: boolean;
+  /** Tile used as pathfinding start (usually the player's current tile). */
+  pathFrom?: Tile;
   /** Lift the candle fog so the whole maze is visible. */
   revealMap?: boolean;
   /** Fuel critically low — pulse light and character aura. */
@@ -73,7 +75,7 @@ export class MazeView {
   private floorTexture: DynamicTexture | null = null;
   private readonly character: Character;
   private readonly door: Door;
-  private readonly exitArrow: ExitArrow;
+  private readonly exitPath: ExitPath;
   private fog = Color3.FromHexString("#e4e1dc");
   private maze: Maze | null = null;
   private cam = { x: 0, y: 0, viewW: MIN_VISIBLE_TILES, viewH: MIN_VISIBLE_TILES };
@@ -88,7 +90,7 @@ export class MazeView {
 
     this.door = new Door(scene);
     this.character = new Character(scene);
-    this.exitArrow = new ExitArrow(scene);
+    this.exitPath = new ExitPath(scene);
 
     const post = new PostProcess("candleLight", LIGHT_SHADER, LIGHT_UNIFORMS, null, 1.0, this.camera);
     post.onApply = (effect) => {
@@ -138,7 +140,7 @@ export class MazeView {
     this.floor = floor;
     this.floorTexture = tex;
     this.door.setPosition(maze.exit.x, -maze.exit.y);
-    this.exitArrow.setVisible(false);
+    this.exitPath.setVisible(false);
     this.snapCamera = true;
   }
 
@@ -170,9 +172,11 @@ export class MazeView {
     this.character.update(dt, frame.time, frame.moving, frame.facing, frame.warmth);
     this.door.update(dt, frame.time);
 
-    const showArrow = !!frame.showExitArrow;
-    this.exitArrow.setVisible(showArrow);
-    if (showArrow) this.exitArrow.update(frame.player, this.maze.exit);
+    const showPath = !!frame.showExitPath;
+    this.exitPath.setVisible(showPath);
+    if (showPath && frame.pathFrom) {
+      this.exitPath.update(this.maze, frame.player, frame.pathFrom, this.maze.exit, frame.time);
+    }
 
     this.light = {
       x: frame.player.x,
