@@ -67,7 +67,8 @@ Babylon.js is only downloaded on the game page, so the rest of the site stays li
 
 ```
 content/                 Markdown pages (frontmatter + body)
-public/logo.svg          Brand mark
+public/logo.png          Brand mark
+public/favicon.*         Favicons + web manifest icons
 index.html               Home
 games/save-the-light/    Game HTML entry
 vite/                    Content → HTML plugin and shared chrome
