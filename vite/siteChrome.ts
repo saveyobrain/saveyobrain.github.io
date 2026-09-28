@@ -44,7 +44,7 @@ export function renderHeader(opts: ChromeOptions): string {
   const home = url(base, "");
   const logo = url(base, "logo.png");
   // Support the project (header): re-enable with
-  // ${navItem(base, currentPath, opts.supportUrl, "Support the project", true)}
+  // ${navItem(base, currentPath, "support-the-project/", "Support the project")}
   return `
 <header class="site-header">
   <a class="site-brand" href="${home}">
@@ -75,18 +75,29 @@ export function renderDocument(opts: ChromeOptions & {
   mainHtml: string;
   mainClass?: string;
   scriptSrc?: string;
+  /** Absolute canonical URL; defaults to SITE_ORIGIN + currentPath. Pass `null` to omit (e.g. 404). */
+  canonicalUrl?: string | null;
 }): string {
-  const { base, title, description, mainHtml, mainClass = "site-main", scriptSrc, bodyClass = "" } = opts;
+  const { base, title, description, mainHtml, mainClass = "site-main", scriptSrc, bodyClass = "", currentPath } =
+    opts;
   const script = scriptSrc
     ? `<script type="module" src="${scriptSrc.startsWith("/") || scriptSrc.startsWith(".") ? scriptSrc : url(base, scriptSrc)}"></script>`
     : `<script type="module" src="${url(base, "src/site/nav-entry.ts")}"></script>`;
+  const canonical =
+    opts.canonicalUrl === null
+      ? null
+      : (opts.canonicalUrl ?? canonicalHref(currentPath));
+  const canonicalTag = canonical
+    ? `\n    <link rel="canonical" href="${escapeAttr(canonical)}" />`
+    : "";
 
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <title>${escapeHtml(title)}</title>
+    <meta name="description" content="${escapeAttr(description)}" />${canonicalTag}
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="${escapeAttr(description)}" />
     <meta name="theme-color" content="#fff4dc" />
     <meta property="og:title" content="${escapeAttr(title)}" />
     <meta property="og:description" content="${escapeAttr(description)}" />
@@ -98,7 +109,6 @@ export function renderDocument(opts: ChromeOptions & {
       data-website-id="27d41969-25e7-49bb-b973-f1033571809c"
       data-domains="saveyobrain.com"
     ></script>
-    <title>${escapeHtml(title)}</title>
   </head>
   <body${bodyClass ? ` class="${bodyClass}"` : ""}>
     <div class="site-page">
@@ -112,6 +122,15 @@ export function renderDocument(opts: ChromeOptions & {
   </body>
 </html>
 `;
+}
+
+/** Production origin for canonical URLs (keep in sync with src/config.ts SITE_URL). */
+export const SITE_ORIGIN = "https://saveyobrain.com";
+
+/** Absolute self-canonical URL for a site path (e.g. `about/` → `https://saveyobrain.com/about/`). */
+export function canonicalHref(pathPart: string): string {
+  const p = pathPart.replace(/^\//, "");
+  return p ? `${SITE_ORIGIN}/${p}` : `${SITE_ORIGIN}/`;
 }
 
 function escapeHtml(s: string): string {

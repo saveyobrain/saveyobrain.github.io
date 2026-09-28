@@ -8,7 +8,7 @@ afterEmbed: |
 
   ## Support the project
 
-  If you enjoy Save Yo Brain and want to help it stay free, you can [support the project](https://buymeacoffee.com/saveyobrain). Donations are optional and do not unlock features.
+  If you enjoy Save Yo Brain and want to help it stay free, you can [support the project](/support-the-project/). Donations are optional and do not unlock features.
 ---
 
 # Share your feedback

@@ -99,8 +99,9 @@ describe("levelConfig", () => {
     }
   });
 
-  it("hardcore L1: a clean shortest-path sprint empties the candle", () => {
-    expect(fuelForMinSprint(levelConfig(1, "hardcore"))).toBeGreaterThanOrEqual(1);
+  it("hardcore L1: a clean shortest-path sprint costs most of the candle", () => {
+    // Playtested moveBurn values no longer fully block L1; still leave little margin for detours.
+    expect(fuelForMinSprint(levelConfig(1, "hardcore"))).toBeGreaterThan(0.7);
   });
 
   it("level 1 math: easy up to 6, normal up to 10, hard up to 15, hardcore up to 20", () => {
