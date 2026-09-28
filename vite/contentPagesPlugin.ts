@@ -3,10 +3,10 @@ import path from "node:path";
 import matter from "gray-matter";
 import { marked } from "marked";
 import type { Plugin } from "vite";
-import { renderDocument } from "./siteChrome.ts";
+import { canonicalHref, renderDocument } from "./siteChrome.ts";
 
 const SITE_NAME = "Save Yo Brain";
-const SUPPORT_URL = "https://buymeacoffee.com/saveyobrain";
+const BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/saveyobrain";
 const DEFAULT_DESCRIPTION =
   "Free browser games that help kids and grown-ups build and keep their math skills.";
 
@@ -17,6 +17,8 @@ interface PageDef {
   out: string;
   /** Path used for nav active state, trailing slash except home. */
   currentPath: string;
+  /** Absolute canonical path under the site origin (defaults to currentPath). Omit or empty to skip the tag. */
+  canonicalPath?: string | null;
   mainClass?: string;
   bodyClass?: string;
   /** Override script (absolute from site root or /src/...). */
@@ -39,6 +41,11 @@ const PAGES: PageDef[] = [
     currentPath: "feedback/",
   },
   {
+    md: "support-the-project.md",
+    out: "support-the-project/index.html",
+    currentPath: "support-the-project/",
+  },
+  {
     md: "terms-privacy.md",
     out: "terms-privacy/index.html",
     currentPath: "terms-privacy/",
@@ -47,6 +54,7 @@ const PAGES: PageDef[] = [
   {
     out: "404.html",
     currentPath: "",
+    canonicalPath: null,
     title: `Page not found - ${SITE_NAME}`,
     description: DEFAULT_DESCRIPTION,
     mainClass: "site-main content-page",
@@ -88,8 +96,10 @@ function writePages(root: string, base: string): string[] {
     const html = renderDocument({
       base,
       siteName: SITE_NAME,
-      supportUrl: SUPPORT_URL,
+      supportUrl: BUY_ME_A_COFFEE_URL,
       currentPath: page.currentPath,
+      canonicalUrl:
+        page.canonicalPath === null ? null : canonicalHref(page.canonicalPath ?? page.currentPath),
       title,
       description,
       mainHtml,
@@ -150,6 +160,7 @@ export function contentPageInputs(root: string): Record<string, string> {
   return {
     about: path.join(root, "about/index.html"),
     feedback: path.join(root, "feedback/index.html"),
+    support: path.join(root, "support-the-project/index.html"),
     "terms-privacy": path.join(root, "terms-privacy/index.html"),
     notFound: path.join(root, "404.html"),
   };

@@ -3,7 +3,9 @@ export const SITE_SLUG = "saveyobrain";
 export const SITE_URL = "https://saveyobrain.com";
 export const STORAGE_PREFIX = `${SITE_SLUG}:v1`;
 
-export const SUPPORT_URL = "https://buymeacoffee.com/saveyobrain";
+export const BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/saveyobrain";
+/** In-site Support page (About, Feedback, and game modals link here). */
+export const SUPPORT_PAGE_PATH = "support-the-project/";
 export const CONTACT_URL = "https://github.com/saveyobrain/saveyobrain.github.io/issues";
 
 /** Short link to the feedback form (open in new tab). */

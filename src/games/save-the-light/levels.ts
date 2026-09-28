@@ -48,11 +48,11 @@ interface DifficultyTuning {
 
 const TUNING: Record<Difficulty, DifficultyTuning> = {
   // Easy: discourage sprinting; Normal+: block a clean L1 shortest-path sprint.
-  easy: { burn: 0.6, moveBurn: 5, lifeScale: 0.7, fuel: 1, penalty: 1, light: 1, extraCells: 0, firstTier: 0, levelsPerTier: 2, mapSpawnCoef: 1, mapRevealsFog: false },
+  easy: { burn: 0.6, moveBurn: 3, lifeScale: 0.7, fuel: 1, penalty: 1, light: 1, extraCells: 0, firstTier: 0, levelsPerTier: 2, mapSpawnCoef: 1, mapRevealsFog: false },
   // firstTier: 1 = numbers up to 10, 2 = up to 15, 3 = up to 20 with three options (see core/math/tiers.ts).
-  normal: { burn: 0.75, moveBurn: 7, lifeScale: 0.6, fuel: 0.9, penalty: 1, light: 0.95, extraCells: 1, firstTier: 1, levelsPerTier: 1, mapSpawnCoef: 2, mapRevealsFog: false },
-  hard: { burn: 0.8, moveBurn: 10, lifeScale: 0.5, fuel: 0.8, penalty: 1.25, light: 0.85, extraCells: 2, firstTier: 2, levelsPerTier: 1, mapSpawnCoef: 2.5, mapRevealsFog: false },
-  hardcore: { burn: 0.9, moveBurn: 13, lifeScale: 0.5, fuel: 0.7, penalty: 1.5, light: 0.72, extraCells: 3, firstTier: 3, levelsPerTier: 1, mapSpawnCoef: 3, mapRevealsFog: false },
+  normal: { burn: 0.75, moveBurn: 5, lifeScale: 0.6, fuel: 0.9, penalty: 1, light: 0.95, extraCells: 1, firstTier: 1, levelsPerTier: 1, mapSpawnCoef: 2, mapRevealsFog: false },
+  hard: { burn: 0.8, moveBurn: 7, lifeScale: 0.5, fuel: 0.8, penalty: 1.25, light: 0.85, extraCells: 2, firstTier: 2, levelsPerTier: 1, mapSpawnCoef: 2.5, mapRevealsFog: false },
+  hardcore: { burn: 0.9, moveBurn: 10, lifeScale: 0.5, fuel: 0.7, penalty: 1.5, light: 0.72, extraCells: 3, firstTier: 3, levelsPerTier: 1, mapSpawnCoef: 3, mapRevealsFog: false },
 };
 
 export function levelConfig(level: number, difficulty: Difficulty): LevelConfig {

@@ -7,7 +7,7 @@ import { generateTask, type MathTask } from "../../core/math/tasks";
 import { DIFFICULTIES, type Difficulty } from "../../core/difficulty";
 import { loadProgress, updateProgress } from "../../core/storage";
 import { track } from "../../analytics";
-import { SUPPORT_URL } from "../../config";
+import { SUPPORT_PAGE_PATH } from "../../config";
 import { h } from "../../core/ui/dom";
 import { createHud } from "../../core/ui/hud";
 import { showModal, type Modal, type ModalButton } from "../../core/ui/modal";
@@ -40,7 +40,11 @@ function feedbackButton(): ModalButton {
 }
 
 function supportButton(): ModalButton {
-  return { label: strings.support, href: SUPPORT_URL, external: true };
+  return {
+    label: strings.support,
+    href: `${import.meta.env.BASE_URL}${SUPPORT_PAGE_PATH}`,
+    external: false,
+  };
 }
 
 type State = "intro" | "playing" | "paused" | "won" | "lost";

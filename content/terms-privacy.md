@@ -31,7 +31,7 @@ The Games are designed to be suitable for children. We recommend that children u
 
 ### 5. Donations and external links
 
-The Site may link to third-party websites, including Buy Me a Coffee for voluntary donations. Donations are optional, are not required to use the Site and do not purchase any goods, services or features. Third-party websites are governed by their own terms and privacy policies, and we are not responsible for their content or practices.
+The Site may accept voluntary donations, including via Buy Me a Coffee and cryptocurrency wallet addresses listed on the Support the project page. Donations are optional, are not required to use the Site and do not purchase any goods, services or features. Third-party websites (such as Buy Me a Coffee) and blockchain networks are governed by their own terms and privacy policies, and we are not responsible for their content, fees or practices. Crypto transfers are irreversible; please verify the network and address before sending.
 
 ### 6. Changes
 

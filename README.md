@@ -23,11 +23,12 @@ Principles:
 | `/` | Home — games list |
 | `/about/` | About |
 | `/feedback/` | Feedback (Google Form) |
+| `/support-the-project/` | Support the project (Buy Me a Coffee + crypto) |
 | `/terms-privacy/` | Terms & Privacy |
 | `/games/save-the-light/` | Save the Light |
 | `/404.html` | Not found (served by GitHub Pages for unknown paths) |
 
-Editable content (About, Feedback, Terms & Privacy) lives in Markdown under [`content/`](content/) with YAML
+Editable content (About, Feedback, Support, Terms & Privacy) lives in Markdown under [`content/`](content/) with YAML
 frontmatter for title and description. The Vite plugin in [`vite/contentPagesPlugin.ts`](vite/contentPagesPlugin.ts)
 turns those files into static HTML with shared chrome and meta tags.
 

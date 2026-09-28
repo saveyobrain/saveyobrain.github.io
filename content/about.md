@@ -22,4 +22,4 @@ Your progress stays in your own browser. Nothing is sent to us. Clear this site'
 
 ## Support the project
 
-If you enjoy the games and want to help them stay free, you can [support the project](https://buymeacoffee.com/saveyobrain). Donations are optional and do not unlock features.
+If you enjoy the games and want to help them stay free, you can [support the project](/support-the-project/). Donations are optional and do not unlock features.
