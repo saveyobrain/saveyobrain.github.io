@@ -28,16 +28,27 @@ function navItem(base: string, currentPath: string, href: string, label: string,
   return `<a href="${full}"${cls}${extra}>${label}</a>`;
 }
 
+/** Favicon + PWA icon links for document heads. */
+export function renderIconLinks(base: string): string {
+  return [
+    `<link rel="icon" href="${url(base, "favicon.ico")}" sizes="any" />`,
+    `<link rel="icon" href="${url(base, "favicon.svg")}" type="image/svg+xml" />`,
+    `<link rel="icon" href="${url(base, "favicon-96x96.png")}" type="image/png" sizes="96x96" />`,
+    `<link rel="apple-touch-icon" href="${url(base, "apple-touch-icon.png")}" />`,
+    `<link rel="manifest" href="${url(base, "site.webmanifest")}" />`,
+  ].join("\n    ");
+}
+
 export function renderHeader(opts: ChromeOptions): string {
   const { base, siteName, currentPath } = opts;
   const home = url(base, "");
-  const logo = url(base, "logo.svg");
+  const logo = url(base, "logo.png");
   // Support the project (header): re-enable with
   // ${navItem(base, currentPath, opts.supportUrl, "Support the project", true)}
   return `
 <header class="site-header">
   <a class="site-brand" href="${home}">
-    <img class="site-logo" src="${logo}" width="40" height="40" alt="" />
+    <img class="site-logo" src="${logo}" width="34" height="40" alt="" />
     <span class="site-brand-text">${siteName}</span>
   </a>
   <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
@@ -66,7 +77,6 @@ export function renderDocument(opts: ChromeOptions & {
   scriptSrc?: string;
 }): string {
   const { base, title, description, mainHtml, mainClass = "site-main", scriptSrc, bodyClass = "" } = opts;
-  const favicon = url(base, "logo.svg");
   const script = scriptSrc
     ? `<script type="module" src="${scriptSrc.startsWith("/") || scriptSrc.startsWith(".") ? scriptSrc : url(base, scriptSrc)}"></script>`
     : `<script type="module" src="${url(base, "src/site/nav-entry.ts")}"></script>`;
@@ -81,7 +91,7 @@ export function renderDocument(opts: ChromeOptions & {
     <meta property="og:title" content="${escapeAttr(title)}" />
     <meta property="og:description" content="${escapeAttr(description)}" />
     <meta property="og:type" content="website" />
-    <link rel="icon" href="${favicon}" type="image/svg+xml" />
+    ${renderIconLinks(base)}
     <title>${escapeHtml(title)}</title>
   </head>
   <body${bodyClass ? ` class="${bodyClass}"` : ""}>
