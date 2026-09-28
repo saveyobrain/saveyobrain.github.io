@@ -5,7 +5,7 @@ description: Terms of Use and Privacy Policy for Save Yo Brain.
 
 # Terms of Use & Privacy Policy
 
-*Last updated: September 27, 2026*
+*Last updated: September 28, 2026*
 
 These terms and this privacy policy apply to Save Yo Brain (the "Site") and all games available on it (the "Games"). By using the Site you agree to them. If you do not agree, please do not use the Site.
 
@@ -41,7 +41,13 @@ We may update these terms and this privacy policy at any time. Changes take effe
 
 ### Information we collect
 
-The Site has no user accounts, no advertising, no analytics or tracking tools, and does not set cookies for tracking. We do not ask you to sign in.
+The Site has no user accounts and no advertising. We do not ask you to sign in. The Site does not set cookies for tracking.
+
+### Analytics
+
+We use Umami Cloud, a privacy-focused analytics service, to understand how the Site is used in aggregate — for example how many people visit pages, open a game, start a level, or complete or fail a level. Events may include the game id, level number and difficulty. They are not used to build advertising profiles or to identify you across other websites.
+
+Umami does not use cookies for this tracking. Analytics data is processed by Umami Cloud under [Umami's privacy policy](https://umami.is/privacy).
 
 ### Feedback form
 
@@ -55,7 +61,7 @@ You can delete it at any time by clearing this Site's data in your browser setti
 
 ### Hosting
 
-The Site is hosted on GitHub Pages. Like any web host, GitHub may automatically log technical information such as your IP address when your browser requests the Site, for security and operational purposes. This is handled by GitHub under the GitHub Privacy Statement; we do not have access to these logs and do not use them.
+The Site is served at https://saveyobrain.com and hosted on GitHub Pages (custom domain). Like any web host, GitHub may automatically log technical information such as your IP address when your browser requests the Site, for security and operational purposes. This is handled by GitHub under the GitHub Privacy Statement; we do not have access to these logs and do not use them.
 
 ### Children's privacy
 
