@@ -5,7 +5,7 @@ import { contentPageInputs, contentPagesPlugin } from "./vite/contentPagesPlugin
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 
-// BASE_PATH is "/saveyobrain/" for GitHub Pages project sites, "/" for a custom domain or local dev.
+// BASE_PATH=/ for production (saveyobrain.com) and local dev. Use "/<repo>/" only for a GitHub Pages project sub-path.
 export default defineConfig({
   base: process.env.BASE_PATH ?? "/",
   plugins: [contentPagesPlugin()],

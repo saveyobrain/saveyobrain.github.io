@@ -1,3 +1,4 @@
+import { track } from "../analytics";
 import "../styles.css";
 import { findGame } from "../core/registry";
 import { h } from "../core/ui/dom";
@@ -36,6 +37,7 @@ async function boot(): Promise<void> {
     { root, exit: goHome },
     { level: Number.isInteger(level) && level >= 1 ? level : undefined },
   );
+  track("game_open", { game_id: GAME_ID });
 }
 
 void boot();

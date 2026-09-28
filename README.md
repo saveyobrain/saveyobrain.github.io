@@ -1,8 +1,5 @@
 # Save Yo Brain
 
-> Working title. The name, website and repo (`saveyobrain`) may change later; the name lives in
-> [`src/config.ts`](src/config.ts) and [`index.html`](index.html).
-
 ## Core idea
 
 **Free browser games that help children, and people in general, build and keep their basic math skills.**
@@ -76,7 +73,7 @@ src/
   pages/                 Home and game entry scripts
   site/                  Nav + legacy hash redirects
   hub/                   Game card grid for the home page
-  config.ts              Site name, support URL, feedback form URL
+  config.ts              Site name, URLs, Umami website id
   strings.ts             UI text (English)
   core/                  Shared game engine pieces
   games/save-the-light/  Maze game implementation
@@ -100,13 +97,11 @@ tests/
 
 ## Deployment
 
-Live site: **https://saveyobrain.github.io/**
+Live site: **https://saveyobrain.com** (`www` redirects to the apex domain).
 
 The GitHub Actions workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) tests, builds and
 publishes to GitHub Pages on every push to `main`. Day-to-day work happens on `dev`; merge into `main` to release.
 
-- Pages source is set to **GitHub Actions** in the repo settings.
-- The site is served from the domain root, so the workflow builds with `BASE_PATH=/`. For a project site under a
-  sub-path (`https://<owner>.github.io/<repo>/`), set `BASE_PATH=/<repo>/` instead.
-- Custom domain: set it in **Settings > Pages > Custom domain** and add the DNS records GitHub shows there.
-  With Actions-based deployments no `CNAME` file is needed, and `BASE_PATH` stays `/`.
+- Pages source is **GitHub Actions**; the custom domain is configured in **Settings > Pages**.
+- The site is served from the domain root, so the workflow builds with `BASE_PATH=/`.
+- With Actions-based deployments no `CNAME` file is needed in the repo.

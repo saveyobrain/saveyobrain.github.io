@@ -6,6 +6,7 @@ import { createRng } from "../../core/math/rng";
 import { generateTask, type MathTask } from "../../core/math/tasks";
 import { DIFFICULTIES, type Difficulty } from "../../core/difficulty";
 import { loadProgress, updateProgress } from "../../core/storage";
+import { track } from "../../analytics";
 import { SUPPORT_URL } from "../../config";
 import { h } from "../../core/ui/dom";
 import { createHud } from "../../core/ui/hud";
@@ -162,9 +163,12 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function play(): void {
+    // Resume / info-dismiss also call play(); only count intro → playing as a start.
+    const starting = state === "intro";
     closeModal();
     state = "playing";
     panel.setEnabled(feedbackTimer <= 0);
+    if (starting) track("game_start", { game_id: GAME_ID, level, difficulty });
   }
 
   function pauseForInfo(title: string, lines: string[]): void {
@@ -247,6 +251,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     state = "won";
     panel.setEnabled(false);
     view.openDoor();
+    track("level_complete", { game_id: GAME_ID, level, difficulty });
     updateProgress(GAME_ID, (p) => {
       p.difficulty = difficulty;
       p.levels[difficulty] = Math.max(p.levels[difficulty], level + 1);
@@ -279,6 +284,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   function lose(): void {
     state = "lost";
     panel.setEnabled(false);
+    track("level_fail", { game_id: GAME_ID, level, difficulty });
     openModal({
       title: t.candleOut,
       lines: [t.candleOutHint],

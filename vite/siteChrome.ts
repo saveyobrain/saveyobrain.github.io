@@ -92,6 +92,12 @@ export function renderDocument(opts: ChromeOptions & {
     <meta property="og:description" content="${escapeAttr(description)}" />
     <meta property="og:type" content="website" />
     ${renderIconLinks(base)}
+    <script
+      defer
+      src="https://cloud.umami.is/script.js"
+      data-website-id="27d41969-25e7-49bb-b973-f1033571809c"
+      data-domains="saveyobrain.com"
+    ></script>
     <title>${escapeHtml(title)}</title>
   </head>
   <body${bodyClass ? ` class="${bodyClass}"` : ""}>
