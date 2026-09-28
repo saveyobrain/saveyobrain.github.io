@@ -51,7 +51,7 @@ export const strings = {
     exitLockedHint: "Solve at least one math task to open the door.",
     mapFound: "You found a map!",
     mapFoundHint: "Solve one more task to decrypt it.",
-    mapDecryptedArrow: "Map decrypted — follow the arrow to the exit.",
+    mapDecryptedArrow: "Map decrypted — follow the dashed path to the exit.",
     mapDecryptedReveal: "Map decrypted — the maze is revealed!",
     difficultyHints: {
       easy: "Small mazes, gentle math. The candle burns faster when you move.",

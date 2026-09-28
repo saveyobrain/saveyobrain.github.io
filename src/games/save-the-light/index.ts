@@ -22,7 +22,7 @@ const GAME_ID = "save-the-light";
 const FEEDBACK_CORRECT_SECONDS = 0.45;
 const FEEDBACK_WRONG_SECONDS = 1.2;
 /** Fuel fraction that triggers critical light/HUD pulse. */
-const CRITICAL_FUEL = 0.15;
+const CRITICAL_FUEL = 0.25;
 
 /** After completing these levels (and every 3rd level from 15 onward), offer Support. */
 function showSupportAfterLevel(n: number): boolean {
@@ -89,7 +89,9 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function nextTask(): void {
-    task = generateTask(cfg.mathTier, rng, task);
+    task = generateTask(cfg.mathTier, rng, task, {
+      allowTrivial: level === 1 && difficulty === "easy",
+    });
     panel.show(task);
     panel.setEnabled(state === "playing");
   }
@@ -355,7 +357,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       radius: currentRadius,
       warmth: candle.flare,
       time,
-      showExitArrow: mapPhase === "decrypted" && !cfg.mapRevealsFog,
+      showExitPath: mapPhase === "decrypted" && !cfg.mapRevealsFog,
+      pathFrom: player.tile,
       revealMap: mapPhase === "decrypted" && cfg.mapRevealsFog,
       criticalFuel,
     });

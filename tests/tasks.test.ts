@@ -65,6 +65,25 @@ describe("generateTask", () => {
     }
   });
 
+  it("without allowTrivial, avoids ±1, ×1, and n÷n style tasks", () => {
+    for (let tierIndex = 0; tierIndex < TIERS.length; tierIndex++) {
+      const rng = createRng(99 + tierIndex);
+      for (let i = 0; i < 2000; i++) {
+        const task = generateTask(tierIndex, rng);
+        if (task.kind === "add" || task.kind === "sub" || task.kind === "mul") {
+          const [a, b] = task.text.split(/ [^\d] /).map(Number);
+          expect(a, task.text).toBeGreaterThanOrEqual(2);
+          expect(b, task.text).toBeGreaterThanOrEqual(2);
+        }
+        if (task.kind === "div") {
+          const [, b] = task.text.split(/ [^\d] /).map(Number);
+          expect(b, task.text).toBeGreaterThanOrEqual(2);
+          expect(task.answer, task.text).toBeGreaterThanOrEqual(2);
+        }
+      }
+    }
+  });
+
   it("is reproducible with the same seed", () => {
     const a = createRng(99);
     const b = createRng(99);
