@@ -1,0 +1,53 @@
+Third-party notices
+===================
+
+This project includes open-source libraries. Those libraries remain under their
+own licenses. The Save Yo Brain Non-Commercial Source License applies only to
+the original Save Yo Brain code and assets, not to the libraries below.
+
+Runtime dependency
+------------------
+
+Babylon.js (@babylonjs/core)
+  License: Apache License 2.0
+  Copyright: Microsoft Corporation and Babylon.js contributors
+  Homepage: https://www.babylonjs.com/
+  Source: https://github.com/BabylonJS/Babylon.js
+
+  A copy of the Apache License 2.0 text is available at:
+  https://www.apache.org/licenses/LICENSE-2.0
+
+  Redistribution of Babylon.js (including when bundled with this site) must
+  retain the Apache License notices required by that license. Using Babylon.js
+  does not change the non-commercial terms that apply to Save Yo Brain's own
+  source code.
+
+Development / build tools
+-------------------------
+
+Vite
+  License: MIT
+  Homepage: https://vite.dev/
+
+TypeScript
+  License: Apache License 2.0
+  Homepage: https://www.typescriptlang.org/
+
+Vitest
+  License: MIT
+  Homepage: https://vitest.dev/
+
+marked
+  License: MIT
+  Homepage: https://marked.js.org/
+
+gray-matter
+  License: MIT
+  Homepage: https://github.com/jonschlinkert/gray-matter
+
+Unicode emoji
+-------------
+
+A few UI labels use standard Unicode emoji characters (for example a candle
+and a coffee cup). Those characters are rendered by the visitor's device fonts.
+They are not redistributed as image assets in this repository.

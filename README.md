@@ -96,6 +96,16 @@ tests/
 3. Add `games/<game-id>/index.html` and a small page script (see [`src/pages/game.ts`](src/pages/game.ts)).
 4. Register the HTML in [`vite.config.ts`](vite.config.ts) `rollupOptions.input`.
 
+## License
+
+The original Save Yo Brain source code and assets are under the
+[Save Yo Brain Non-Commercial Source License](LICENSE): free to use, study,
+modify and share for non-commercial purposes, with attribution required.
+Commercial use needs prior written permission.
+
+Third-party libraries (notably Babylon.js under Apache 2.0) keep their own
+licenses; see [NOTICE](NOTICE).
+
 ## Deployment
 
 Live site: **https://saveyobrain.com** (`www` redirects to the apex domain).
