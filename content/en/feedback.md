@@ -6,13 +6,17 @@ embedTitle: Feedback form
 afterEmbed: |
   <aside class="cookie-notice" role="note"><img class="cookie-notice-icon" src="/cookie.svg" width="36" height="36" alt="" /><span>Google hosts this form and may set cookies.</span></aside>
 
+  ## Prefer Discord?
+
+  You can also [join the Save Yo Brain Discord](https://discord.gg/v8EGtW688) to chat or leave feedback there.
+
   ## Support the project
 
-  If you enjoy Save Yo Brain and want to help it stay free, you can [support the project](/support-the-project/). Donations are optional and do not unlock features.
+  If you enjoy Save Yo Brain and want to help it stay free, you can [support the project](__LOCALE_ROOT__support-the-project/). Donations are optional and do not unlock features.
 ---
 
 # Share your feedback
 
 We'd love to hear from you — ideas for new games, bugs you hit, or anything that would make practice more fun.
 
-Use the form below. If it does not load, check that you are online, or [open the form in a new tab](https://forms.gle/dskxjxmu7NDkUY1b8).
+Use the form below. If it does not load, check that you are online, or [open the form in a new tab](https://forms.gle/dskxjxmu7NDkUY1b8). You can also [chat with us on Discord](https://discord.gg/v8EGtW688).

@@ -20,17 +20,23 @@ Principles:
 
 | URL | Page |
 | --- | --- |
-| `/` | Home — games list |
-| `/about/` | About |
-| `/feedback/` | Feedback (Google Form) |
-| `/support-the-project/` | Support the project (Buy Me a Coffee + crypto) |
-| `/terms-privacy/` | Terms & Privacy |
-| `/games/save-the-light/` | Save the Light |
+| `/` | Home — games list (English) |
+| `/ua/` | Home — Ukrainian |
+| `/about/`, `/ua/about/` | About |
+| `/feedback/`, `/ua/feedback/` | Feedback (Google Form) |
+| `/support-the-project/`, `/ua/support-the-project/` | Support the project (Buy Me a Coffee + crypto) |
+| `/terms-privacy/`, `/ua/terms-privacy/` | Terms & Privacy |
+| `/games/save-the-light/`, `/ua/games/save-the-light/` | Save the Light |
 | `/404.html` | Not found (served by GitHub Pages for unknown paths) |
 
-Editable content (About, Feedback, Support, Terms & Privacy) lives in Markdown under [`content/`](content/) with YAML
-frontmatter for title and description. The Vite plugin in [`vite/contentPagesPlugin.ts`](vite/contentPagesPlugin.ts)
-turns those files into static HTML with shared chrome and meta tags.
+Editable content lives in Markdown under [`content/<locale>/`](content/) (e.g. `content/en/`, `content/ua/`) with YAML
+frontmatter. UI strings for the hub and games live in [`src/i18n/strings/`](src/i18n/strings/). Locales are
+configured in [`src/i18n/locales.ts`](src/i18n/locales.ts): set `enabled: false` to hide a language from the
+picker, stop building its pages, and drop its `hreflang` tags. With only one language enabled, the globe /
+Language control is hidden.
+
+The Vite plugin in [`vite/contentPagesPlugin.ts`](vite/contentPagesPlugin.ts)
+turns those files into static HTML with shared chrome, meta tags, and `rel="alternate" hreflang` links.
 
 ## Games
 

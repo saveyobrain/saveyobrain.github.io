@@ -1,4 +1,4 @@
-import { strings } from "../../strings";
+import { getStrings } from "../../i18n/strings";
 import { h } from "./dom";
 // import { supportLink } from "./support";
 
@@ -11,6 +11,7 @@ export interface Hud {
 }
 
 export function createHud(meterIcon: string, onMenu: () => void): Hud {
+  const strings = getStrings();
   const level = h("div", { class: "hud-level" });
   const fill = h("div", { class: "hud-meter-fill" });
   const meter = h("div", { class: "hud-meter" }, h("span", { class: "hud-meter-icon" }, meterIcon), h("div", { class: "hud-meter-track" }, fill));

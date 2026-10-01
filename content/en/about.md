@@ -20,6 +20,10 @@ Basic math is a life skill, as important as reading and writing. Like any skill,
 
 Your progress stays in your own browser. Nothing is sent to us. Clear this site's data, use private browsing, or switch devices and your progress resets.
 
+## Chat on Discord
+
+Want to talk about the games, share ideas, or just say hello? [Join the Save Yo Brain Discord](https://discord.gg/v8EGtW688).
+
 ## Support the project
 
-If you enjoy the games and want to help them stay free, you can [support the project](/support-the-project/). Donations are optional and do not unlock features.
+If you enjoy the games and want to help them stay free, you can [support the project](__LOCALE_ROOT__support-the-project/). Donations are optional and do not unlock features.

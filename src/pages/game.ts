@@ -2,15 +2,19 @@ import { track } from "../analytics";
 import "../styles.css";
 import { findGame } from "../core/registry";
 import { h } from "../core/ui/dom";
+import { localizePath } from "../i18n/locales";
+import { getActiveLocale, initLocaleFromLocation } from "../i18n/strings";
 import { redirectLegacyHash } from "../site/redirects";
 
 const GAME_ID = "save-the-light";
 
 function goHome(): void {
-  location.href = import.meta.env.BASE_URL;
+  const locale = getActiveLocale();
+  location.href = `${import.meta.env.BASE_URL}${localizePath("", locale)}`;
 }
 
 async function boot(): Promise<void> {
+  initLocaleFromLocation();
   if (redirectLegacyHash()) return;
 
   const app = document.getElementById("app");
@@ -18,7 +22,7 @@ async function boot(): Promise<void> {
 
   const game = findGame(GAME_ID);
   if (!game) {
-    location.href = import.meta.env.BASE_URL;
+    goHome();
     return;
   }
 
@@ -27,8 +31,9 @@ async function boot(): Promise<void> {
 
   const runtime = await game.load();
   const level = Number(new URLSearchParams(location.search).get("level"));
+  const locale = getActiveLocale();
   if (location.search) {
-    history.replaceState(null, "", `${import.meta.env.BASE_URL}games/${GAME_ID}/`);
+    history.replaceState(null, "", `${import.meta.env.BASE_URL}${localizePath(`games/${GAME_ID}/`, locale)}`);
   }
 
   const root = h("div", { class: "game-root" });
@@ -37,7 +42,7 @@ async function boot(): Promise<void> {
     { root, exit: goHome },
     { level: Number.isInteger(level) && level >= 1 ? level : undefined },
   );
-  track("game_open", { game_id: GAME_ID });
+  track("game_open", { game_id: GAME_ID, locale });
 }
 
 void boot();
