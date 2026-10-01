@@ -12,7 +12,8 @@ import { h } from "../../core/ui/dom";
 import { createHud } from "../../core/ui/hud";
 import { showModal, type Modal, type ModalButton } from "../../core/ui/modal";
 import { createTaskPanel } from "../../core/ui/taskPanel";
-import { strings } from "../../strings";
+import { localizePath } from "../../i18n/locales";
+import { getActiveLocale, getStrings } from "../../i18n/strings";
 import { Candle } from "./candle";
 import { levelConfig, type LevelConfig } from "./levels";
 import { findPath, generateMaze, isWall, type Maze, type Tile } from "./maze";
@@ -32,17 +33,19 @@ function showSupportAfterLevel(n: number): boolean {
 }
 
 function feedbackButton(): ModalButton {
+  const locale = getActiveLocale();
   return {
-    label: strings.shareFeedback,
-    href: `${import.meta.env.BASE_URL}feedback/`,
+    label: getStrings(locale).shareFeedback,
+    href: `${import.meta.env.BASE_URL}${localizePath("feedback/", locale)}`,
     external: false,
   };
 }
 
 function supportButton(): ModalButton {
+  const locale = getActiveLocale();
   return {
-    label: strings.support,
-    href: `${import.meta.env.BASE_URL}${SUPPORT_PAGE_PATH}`,
+    label: getStrings(locale).support,
+    href: `${import.meta.env.BASE_URL}${localizePath(SUPPORT_PAGE_PATH, locale)}`,
     external: false,
   };
 }
@@ -51,6 +54,7 @@ type State = "intro" | "playing" | "paused" | "won" | "lost";
 type MapPhase = "none" | "found" | "decrypted";
 
 function start(ctx: GameContext, options: StartOptions): GameInstance {
+  const strings = getStrings();
   const t = strings.stl;
   const canvas = h("canvas", { class: "game-canvas", "aria-label": t.title });
   const stage = h("div", { class: "stage" }, canvas);

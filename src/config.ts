@@ -8,6 +8,9 @@ export const BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/saveyobrain";
 export const SUPPORT_PAGE_PATH = "support-the-project/";
 export const CONTACT_URL = "https://github.com/saveyobrain/saveyobrain.github.io/issues";
 
+/** Discord community invite (keep in sync with links in content/about.md and content/feedback.md). */
+export const DISCORD_INVITE_URL = "https://discord.gg/v8EGtW688";
+
 /** Short link to the feedback form (open in new tab). */
 export const FEEDBACK_FORM_SHORT_URL = "https://forms.gle/dskxjxmu7NDkUY1b8";
 

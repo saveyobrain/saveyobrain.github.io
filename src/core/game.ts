@@ -20,8 +20,8 @@ export interface GameRuntime {
 
 export interface GameModule {
   id: string;
-  title: string;
-  description: string;
+  title?: string;
+  description?: string;
   /** Emoji or short text used as the card icon. */
   icon: string;
   /** Card accent color. */

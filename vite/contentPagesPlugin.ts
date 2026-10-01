@@ -3,130 +3,160 @@ import path from "node:path";
 import matter from "gray-matter";
 import { marked } from "marked";
 import type { Plugin } from "vite";
-import { canonicalHref, renderDocument } from "./siteChrome.ts";
+import { enabledLocales, localizePath, type LocaleCode, absoluteLocaleUrl } from "../src/i18n/locales.ts";
+import { getStrings } from "../src/i18n/strings/index.ts";
+import { renderDocument, renderGameDocument, renderHomeDocument, SITE_ORIGIN } from "./siteChrome.ts";
 
 const SITE_NAME = "Save Yo Brain";
-const BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/saveyobrain";
-const DEFAULT_DESCRIPTION =
-  "Free browser games that help kids and grown-ups build and keep their math skills.";
 
 interface PageDef {
-  /** Markdown file under content/, or null for a hand-built page. */
+  /** Markdown file name under content/<locale>/ */
   md?: string;
-  /** Output HTML path relative to project root. */
-  out: string;
-  /** Path used for nav active state, trailing slash except home. */
-  currentPath: string;
-  /** Absolute canonical path under the site origin (defaults to currentPath). Omit or empty to skip the tag. */
-  canonicalPath?: string | null;
+  /** Logical path without locale prefix (e.g. about/). */
+  logicalPath: string;
   mainClass?: string;
   bodyClass?: string;
-  /** Override script (absolute from site root or /src/...). */
   scriptSrc?: string;
-  /** Build main HTML without markdown (e.g. 404). */
   mainHtml?: string;
   title?: string;
   description?: string;
+  /** Skip hreflang (404). */
+  noHreflang?: boolean;
 }
 
-const PAGES: PageDef[] = [
-  {
-    md: "about.md",
-    out: "about/index.html",
-    currentPath: "about/",
-  },
-  {
-    md: "feedback.md",
-    out: "feedback/index.html",
-    currentPath: "feedback/",
-  },
-  {
-    md: "support-the-project.md",
-    out: "support-the-project/index.html",
-    currentPath: "support-the-project/",
-  },
+const CONTENT_PAGES: PageDef[] = [
+  { md: "about.md", logicalPath: "about/" },
+  { md: "feedback.md", logicalPath: "feedback/" },
+  { md: "support-the-project.md", logicalPath: "support-the-project/" },
   {
     md: "terms-privacy.md",
-    out: "terms-privacy/index.html",
-    currentPath: "terms-privacy/",
+    logicalPath: "terms-privacy/",
     mainClass: "site-main content-page legal",
-  },
-  {
-    out: "404.html",
-    currentPath: "",
-    canonicalPath: null,
-    title: `Page not found - ${SITE_NAME}`,
-    description: DEFAULT_DESCRIPTION,
-    mainClass: "site-main content-page",
-    mainHtml: `<h1>Page not found</h1>
-<p>That page does not exist. Head back home and pick a game.</p>
-<p><a class="btn btn-primary" href="__HOME__">Back to home</a></p>`,
   },
 ];
 
-function writePages(root: string, base: string): string[] {
-  const contentDir = path.join(root, "content");
-  const written: string[] = [];
+function localeRootHref(base: string, locale: LocaleCode): string {
+  const b = base.endsWith("/") ? base : `${base}/`;
+  const prefix = localizePath("", locale);
+  return prefix ? `${b}${prefix}` : b;
+}
 
-  for (const page of PAGES) {
-    let title = page.title ?? SITE_NAME;
-    let description = page.description ?? DEFAULT_DESCRIPTION;
-    let mainHtml = page.mainHtml ?? "";
-    let embedHtml = "";
+function rewriteLocalePlaceholders(html: string, base: string, locale: LocaleCode): string {
+  const root = localeRootHref(base, locale);
+  return html.replaceAll("__LOCALE_ROOT__", root).replaceAll("__HOME__", root);
+}
 
-    if (page.md) {
-      const raw = fs.readFileSync(path.join(contentDir, page.md), "utf8");
-      const { data, content } = matter(raw);
-      title = String(data.title ?? title);
-      if (!title.includes(SITE_NAME)) title = `${title} - ${SITE_NAME}`;
-      description = String(data.description ?? description);
-      mainHtml = marked.parse(content, { async: false }) as string;
-      if (data.embedUrl) {
-        const src = escapeAttr(String(data.embedUrl));
-        embedHtml = `<div class="embed-frame"><iframe src="${src}" title="${escapeAttr(String(data.embedTitle ?? "Form"))}" loading="lazy"></iframe></div>`;
-      }
-      if (data.afterEmbed) {
-        embedHtml += marked.parse(String(data.afterEmbed), { async: false }) as string;
-      }
-    }
-
-    mainHtml = mainHtml.replaceAll("__HOME__", baseUrl(base, ""));
-    if (embedHtml) mainHtml += embedHtml;
-
-    const html = renderDocument({
-      base,
-      siteName: SITE_NAME,
-      supportUrl: BUY_ME_A_COFFEE_URL,
-      currentPath: page.currentPath,
-      canonicalUrl:
-        page.canonicalPath === null ? null : canonicalHref(page.canonicalPath ?? page.currentPath),
-      title,
-      description,
-      mainHtml,
-      mainClass: page.mainClass ?? "site-main content-page",
-      bodyClass: page.bodyClass,
-      scriptSrc: page.scriptSrc,
-    });
-
-    const outPath = path.join(root, page.out);
-    fs.mkdirSync(path.dirname(outPath), { recursive: true });
-    fs.writeFileSync(outPath, html, "utf8");
-    written.push(outPath);
+function outPathFor(locale: LocaleCode, logicalPath: string): string {
+  const localized = localizePath(logicalPath, locale);
+  if (!localized || localized.endsWith("/")) {
+    return path.join(localized || "", "index.html");
   }
+  return localized;
+}
+
+function writePages(root: string, base: string): string[] {
+  const written: string[] = [];
+  const locales = enabledLocales();
+
+  for (const { code: locale } of locales) {
+    // Home
+    const homeRel = localizePath("", locale) ? path.join(localizePath("", locale), "index.html") : "index.html";
+    const homePath = path.join(root, homeRel);
+    fs.mkdirSync(path.dirname(homePath), { recursive: true });
+    fs.writeFileSync(homePath, renderHomeDocument(base, locale), "utf8");
+    written.push(homePath);
+
+    // Game shell
+    const gameRel = path.join(localizePath("games/save-the-light/", locale), "index.html");
+    const gamePath = path.join(root, gameRel);
+    fs.mkdirSync(path.dirname(gamePath), { recursive: true });
+    fs.writeFileSync(gamePath, renderGameDocument(base, locale), "utf8");
+    written.push(gamePath);
+
+    for (const page of CONTENT_PAGES) {
+      const s = getStrings(locale);
+      let title = page.title ?? SITE_NAME;
+      let description = page.description ?? s.homeDescription;
+      let mainHtml = page.mainHtml ?? "";
+      let embedHtml = "";
+
+      if (page.md) {
+        const mdPath = path.join(root, "content", locale, page.md);
+        if (!fs.existsSync(mdPath)) {
+          throw new Error(`Missing content for locale "${locale}": ${mdPath}`);
+        }
+        const raw = fs.readFileSync(mdPath, "utf8");
+        const { data, content } = matter(raw);
+        title = String(data.title ?? title);
+        if (!title.includes(SITE_NAME)) title = `${title} - ${SITE_NAME}`;
+        description = String(data.description ?? description);
+        mainHtml = marked.parse(content, { async: false }) as string;
+        if (data.embedUrl) {
+          const src = escapeAttr(String(data.embedUrl));
+          embedHtml = `<div class="embed-frame"><iframe src="${src}" title="${escapeAttr(String(data.embedTitle ?? "Form"))}" loading="lazy"></iframe></div>`;
+        }
+        if (data.afterEmbed) {
+          embedHtml += marked.parse(String(data.afterEmbed), { async: false }) as string;
+        }
+      }
+
+      mainHtml = rewriteLocalePlaceholders(mainHtml + embedHtml, base, locale);
+
+      const html = renderDocument({
+        base,
+        siteName: SITE_NAME,
+        currentPath: localizePath(page.logicalPath, locale),
+        locale,
+        canonicalUrl: absoluteLocaleUrl(SITE_ORIGIN, page.logicalPath, locale),
+        hreflangPath: page.noHreflang ? null : page.logicalPath,
+        title,
+        description,
+        mainHtml,
+        mainClass: page.mainClass ?? "site-main content-page",
+        bodyClass: page.bodyClass,
+        scriptSrc: page.scriptSrc,
+      });
+
+      const rel = outPathFor(locale, page.logicalPath);
+      const outFile = path.join(root, rel);
+      fs.mkdirSync(path.dirname(outFile), { recursive: true });
+      fs.writeFileSync(outFile, html, "utf8");
+      written.push(outFile);
+    }
+  }
+
+  // Single root 404 (English)
+  const s = getStrings("en");
+  const notFoundHtml = renderDocument({
+    base,
+    siteName: SITE_NAME,
+    currentPath: "",
+    locale: "en",
+    canonicalUrl: null,
+    hreflangPath: null,
+    title: s.chrome.notFoundTitle,
+    description: s.homeDescription,
+    mainClass: "site-main content-page",
+    mainHtml: `<h1>${escapeHtml(s.chrome.notFoundHeading)}</h1>
+<p>${escapeHtml(s.chrome.notFoundBody)}</p>
+<p><a class="btn btn-primary" href="${localeRootHref(base, "en")}">${escapeHtml(s.chrome.notFoundCta)}</a></p>`,
+  });
+  const notFoundPath = path.join(root, "404.html");
+  fs.writeFileSync(notFoundPath, notFoundHtml, "utf8");
+  written.push(notFoundPath);
 
   return written;
 }
 
-function baseUrl(base: string, pathPart: string): string {
-  const b = base.endsWith("/") ? base : `${base}/`;
-  return `${b}${pathPart.replace(/^\//, "")}`;
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function escapeAttr(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
-/** Generates static HTML pages from `content/*.md` before Vite builds or serves. */
+/** Generates static HTML pages from `content/<locale>/*.md` before Vite builds or serves. */
 export function contentPagesPlugin(): Plugin {
   let root = process.cwd();
   let base = "/";
@@ -157,11 +187,22 @@ export function contentPagesPlugin(): Plugin {
 }
 
 export function contentPageInputs(root: string): Record<string, string> {
-  return {
-    about: path.join(root, "about/index.html"),
-    feedback: path.join(root, "feedback/index.html"),
-    support: path.join(root, "support-the-project/index.html"),
-    "terms-privacy": path.join(root, "terms-privacy/index.html"),
+  const inputs: Record<string, string> = {
     notFound: path.join(root, "404.html"),
   };
+
+  for (const { code: locale } of enabledLocales()) {
+    const prefix = localizePath("", locale);
+    // EN home + game are listed explicitly in vite.config.ts
+    if (locale !== "en") {
+      inputs[`home-${locale}`] = path.join(root, prefix, "index.html");
+      inputs[`game-${locale}`] = path.join(root, localizePath("games/save-the-light/", locale), "index.html");
+    }
+    for (const page of CONTENT_PAGES) {
+      const rel = outPathFor(locale, page.logicalPath);
+      inputs[`${page.logicalPath.replace(/\//g, "-")}-${locale}`] = path.join(root, rel);
+    }
+  }
+
+  return inputs;
 }

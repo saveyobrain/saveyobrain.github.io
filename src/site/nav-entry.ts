@@ -1,6 +1,10 @@
 import "../styles.css";
-import { initNav } from "./nav";
-import { initWalletCopy } from "./wallets";
+import { initLocaleFromLocation } from "../i18n/strings";
+import { initLangPicker, initNav } from "./nav";
+import { initBmcTracking, initWalletCopy } from "./wallets";
 
+initLocaleFromLocation();
 initNav();
+initLangPicker();
 initWalletCopy();
+initBmcTracking();

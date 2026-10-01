@@ -67,4 +67,4 @@ The Site is served at https://saveyobrain.com and hosted on GitHub Pages (custom
 
 We do not knowingly collect personal information from children through the Site. The optional feedback form is anonymous, but please help children avoid entering personal details in free-text answers.
 
-Questions? [Share your feedback](/feedback/).
+Questions? [Share your feedback](__LOCALE_ROOT__feedback/).
