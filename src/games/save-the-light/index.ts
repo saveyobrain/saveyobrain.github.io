@@ -9,7 +9,8 @@ import { loadProgress, updateProgress } from "../../core/storage";
 import { track } from "../../analytics";
 import { SUPPORT_PAGE_PATH } from "../../config";
 import { h } from "../../core/ui/dom";
-import { createHud } from "../../core/ui/hud";
+import { createCoach, loadCoachFlags, markCoachFlag } from "../../core/ui/coach";
+import { createHud, type MapProgressPhase } from "../../core/ui/hud";
 import { showModal, type Modal, type ModalButton } from "../../core/ui/modal";
 import { createTaskPanel } from "../../core/ui/taskPanel";
 import { localizePath } from "../../i18n/locales";
@@ -25,6 +26,11 @@ const FEEDBACK_CORRECT_SECONDS = 0.45;
 const FEEDBACK_WRONG_SECONDS = 1.2;
 /** Fuel fraction that triggers critical light/HUD pulse. */
 const CRITICAL_FUEL = 0.25;
+/** First-run coach: nudge to solve once fuel drops this far with 0 solves. */
+const COACH_SOLVE_FUEL = 0.5;
+const DECRYPT_TOAST_SECONDS = 2.5;
+/** World tiles above the player for the decrypt toast. */
+const TOAST_OFFSET_TILES = 1.1;
 
 /** After completing these levels (and every 3rd level from 15 onward), offer Support. */
 function showSupportAfterLevel(n: number): boolean {
@@ -82,10 +88,86 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   let mapPhase: MapPhase = "none";
 
   const hud = createHud("\u{1F56F}\uFE0F", () => togglePause());
-  stage.append(hud.el);
+  const toast = h("div", { class: "hud-toast", role: "status" });
+  stage.append(hud.el, toast);
+  let toastTimer = 0;
 
   const panel = createTaskPanel((i) => answer(i));
   ctx.root.append(panel.el);
+
+  const coach = createCoach();
+  const coachFlags = loadCoachFlags();
+  let needSolveCoach = !coachFlags.solve;
+  let needMeterCoach = !coachFlags.meter;
+  let pendingMeterCoach = false;
+
+  function mapHudPhase(): MapProgressPhase {
+    if (mapPhase === "decrypted") return "done";
+    if (mapPhase === "found") return "ready";
+    return "filling";
+  }
+
+  function syncStatusHud(): void {
+    hud.setSolved(solved);
+    hud.setMapProgress(solved, cfg.mapUnlockAt, mapHudPhase());
+  }
+
+  function showDecryptToast(): void {
+    toast.textContent = t.mapDecryptedToast;
+    toast.classList.add("visible");
+    toastTimer = DECRYPT_TOAST_SECONDS;
+  }
+
+  function positionToast(): void {
+    if (toastTimer <= 0) return;
+    const { u, v } = view.worldToScreen(player.pos.x, player.pos.y - TOAST_OFFSET_TILES);
+    toast.style.left = `${u * 100}%`;
+    toast.style.top = `${v * 100}%`;
+  }
+
+  function endCoachAndPlay(): void {
+    state = "playing";
+    panel.setEnabled(feedbackTimer <= 0);
+  }
+
+  function showSolveCoach(): void {
+    if (!needSolveCoach || coach.active) return;
+    needSolveCoach = false;
+    state = "paused";
+    panel.setEnabled(false);
+    closeModal();
+    coach.show({
+      root: ctx.root,
+      focus: "task",
+      message: t.coachSolveHint,
+      buttonLabel: t.coachSolveButton,
+      spotlight: panel.el,
+      onDone: () => {
+        markCoachFlag("solve");
+        endCoachAndPlay();
+      },
+    });
+  }
+
+  function showMeterCoach(): void {
+    if (!needMeterCoach || coach.active) return;
+    needMeterCoach = false;
+    pendingMeterCoach = false;
+    state = "paused";
+    panel.setEnabled(false);
+    closeModal();
+    coach.show({
+      root: ctx.root,
+      focus: "fuel",
+      message: t.coachMeterHint,
+      buttonLabel: strings.ok,
+      spotlight: hud.fuelMeter,
+      onDone: () => {
+        markCoachFlag("meter");
+        endCoachAndPlay();
+      },
+    });
+  }
 
   function openModal(options: Parameters<typeof showModal>[1]): void {
     modal?.close();
@@ -121,7 +203,9 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     view.setMaze(maze, paletteFor(level));
     hud.setLevel(strings.levelWithDifficulty(level, strings.difficulty[difficulty]));
     hud.setMeter(candle.fuel);
-    hud.setInfo("");
+    syncStatusHud();
+    toast.classList.remove("visible");
+    toastTimer = 0;
     state = "intro";
     task = undefined;
     nextTask();
@@ -174,6 +258,11 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     // Resume / info-dismiss also call play(); only count intro → playing as a start.
     const starting = state === "intro";
     closeModal();
+    if (pendingMeterCoach) {
+      showMeterCoach();
+      if (starting) track("game_start", { game_id: GAME_ID, level, difficulty });
+      return;
+    }
     state = "playing";
     panel.setEnabled(feedbackTimer <= 0);
     if (starting) track("game_start", { game_id: GAME_ID, level, difficulty });
@@ -198,6 +287,10 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function togglePause(): void {
+    if (coach.active) {
+      coach.confirm();
+      return;
+    }
     if (state === "playing") {
       state = "paused";
       panel.setEnabled(false);
@@ -216,14 +309,10 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     }
   }
 
-  function mapDecryptedInfo(): string {
-    return cfg.mapRevealsFog ? t.mapDecryptedReveal : t.mapDecryptedArrow;
-  }
-
   function advanceMapOnSolve(): void {
     if (mapPhase === "found") {
       mapPhase = "decrypted";
-      hud.setInfo(mapDecryptedInfo());
+      showDecryptToast();
       return;
     }
     if (mapPhase === "none" && solved >= cfg.mapUnlockAt) {
@@ -245,14 +334,17 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         return;
       }
       advanceMapOnSolve();
+      if (needMeterCoach) pendingMeterCoach = true;
     } else {
       // Guessing at random should never pay off: the penalty balances the odds.
       candle.add((-cfg.fuelPerCorrect / (task.options.length - 1)) * cfg.penaltyScale);
     }
-    hud.setInfo(mapPhase === "decrypted" ? mapDecryptedInfo() : `\u2714 ${solved}`);
+    syncStatusHud();
     panel.showResult(index, correctIndex);
     panel.setEnabled(false);
     feedbackTimer = correct ? FEEDBACK_CORRECT_SECONDS : FEEDBACK_WRONG_SECONDS;
+    // Meter tip after the first correct answer (wait if a map modal just opened).
+    if (correct && pendingMeterCoach && state === "playing") showMeterCoach();
   }
 
   function win(): void {
@@ -329,19 +421,24 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         togglePause();
         break;
       case "confirm":
-        if (state !== "playing") modal?.confirm();
+        if (coach.active) coach.confirm();
+        else if (state !== "playing") modal?.confirm();
         break;
       case "answer":
-        answer(e.index);
+        if (!coach.active) answer(e.index);
         break;
       case "move":
-        if (state === "playing") player.queue(e.dir);
+        if (state === "playing" && !coach.active) player.queue(e.dir);
         break;
     }
   });
 
   function update(dt: number): void {
     time += dt;
+    if (toastTimer > 0) {
+      toastTimer -= dt;
+      if (toastTimer <= 0) toast.classList.remove("visible");
+    }
     if (state === "playing") {
       if (feedbackTimer > 0) {
         feedbackTimer -= dt;
@@ -361,6 +458,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       candle.burn(dt, player.isMoving ? cfg.moveBurnPerSecond : cfg.burnPerSecond);
       hud.setMeter(candle.fuel);
       if (state === "playing" && candle.isOut) lose();
+      else if (needSolveCoach && solved === 0 && candle.fuel <= COACH_SOLVE_FUEL) showSolveCoach();
     }
     currentRadius = candle.radius(state === "playing" ? dt : 0, time);
     const criticalFuel = candle.fuel > 0 && candle.fuel < CRITICAL_FUEL;
@@ -375,7 +473,9 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       pathFrom: player.tile,
       revealMap: mapPhase === "decrypted" && cfg.mapRevealsFog,
       criticalFuel,
+      fuel: candle.fuel,
     });
+    positionToast();
   }
 
   setupLevel();
@@ -386,7 +486,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   });
 
   const onVisibility = () => {
-    if (document.hidden && state === "playing") togglePause();
+    if (document.hidden && state === "playing" && !coach.active) togglePause();
   };
   document.addEventListener("visibilitychange", onVisibility);
 
@@ -396,6 +496,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       document.removeEventListener("visibilitychange", onVisibility);
       canvas.removeEventListener("pointerdown", onPointerDown);
       keyboard.dispose();
+      coach.hide();
       babylon.dispose();
       ctx.root.replaceChildren();
     },

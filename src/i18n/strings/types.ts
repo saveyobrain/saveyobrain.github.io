@@ -66,6 +66,10 @@ export interface Strings {
     mapFoundHint: string;
     mapDecryptedArrow: string;
     mapDecryptedReveal: string;
+    mapDecryptedToast: string;
+    coachSolveHint: string;
+    coachSolveButton: string;
+    coachMeterHint: string;
     difficultyHints: Record<Difficulty, string>;
   };
 }

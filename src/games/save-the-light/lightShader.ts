@@ -2,12 +2,19 @@ import { ShaderStore } from "@babylonjs/core/Engines/shaderStore";
 
 export const LIGHT_SHADER = "candleLight";
 
-export const LIGHT_UNIFORMS = ["uPlayer", "uRadius", "uFog", "uTime", "uWarmth", "uReveal", "uDanger"];
+export const LIGHT_UNIFORMS = ["uPlayer", "uRadius", "uFog", "uTime", "uWarmth", "uReveal", "uDanger", "uFogDark"];
+
+/** 0 at fuel≥50%; ramps continuously to ~0.65 at empty (dark, not black). */
+export function fogDarkFromFuel(fuel: number): number {
+  if (fuel >= 0.5) return 0;
+  return ((0.5 - fuel) / 0.5) * 0.65;
+}
 
 // Near the candle: full, slightly warm color. Toward the edge: colors fade to grey.
 // Beyond the radius: an opaque light fog (bright, not black).
 // uReveal > 0.5: fog-of-war off (full maze visible after decrypting the map).
 // uDanger > 0.5: critical fuel — light radius and glow pulse red.
+// uFogDark: progressive fog darkening when fuel is low.
 ShaderStore.ShadersStore[`${LIGHT_SHADER}FragmentShader`] = /* glsl */ `
 precision highp float;
 varying vec2 vUV;
@@ -16,9 +23,10 @@ uniform vec2 uPlayer;   // pixels
 uniform float uRadius;  // pixels
 uniform vec3 uFog;
 uniform float uTime;
-uniform float uWarmth;  // 0..1, extra glow right after a correct answer
+uniform float uWarmth;  // 0..1, extra glow after a correct answer
 uniform float uReveal;  // 0 = normal fog, 1 = full reveal
 uniform float uDanger;  // 0 = ok, 1 = critical fuel
+uniform float uFogDark; // 0..1 outer fog darkening
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -48,7 +56,8 @@ void main(void) {
   vec3 faded = mix(lit, vec3(grey), smoothstep(0.45, 0.9, t));
 
   float noise = (hash(floor(gl_FragCoord.xy / 3.0) + floor(uTime * 2.0)) - 0.5) * 0.015;
-  vec3 fog = uFog + noise;
+  vec3 fogBase = mix(uFog, vec3(0.14, 0.13, 0.12), uFogDark);
+  vec3 fog = fogBase + noise;
   vec3 result = mix(faded, fog, smoothstep(0.6, 1.0, t));
   gl_FragColor = vec4(result, 1.0);
 }
