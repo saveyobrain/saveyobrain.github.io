@@ -75,6 +75,10 @@ export const en: Strings = {
     mapFoundHint: "Solve one more task to decrypt it.",
     mapDecryptedArrow: "Map decrypted — follow the dashed path to the exit.",
     mapDecryptedReveal: "Map decrypted — the maze is revealed!",
+    mapDecryptedToast: "Map decrypted: follow path to the exit.",
+    coachSolveHint: "Choose the correct answer to keep your candle burning.",
+    coachSolveButton: "Got it!",
+    coachMeterHint: "Watch this bar — if it empties, your candle goes out and the level restarts.",
     difficultyHints: {
       easy: "Small mazes, gentle math. The candle burns faster when you move.",
       normal: "Bigger mazes, math grows quicker. Rushing without solving will snuff you out.",

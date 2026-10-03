@@ -13,7 +13,7 @@ import { Character } from "./character";
 import { Door } from "./door";
 import { ExitPath } from "./exitPath";
 import { isWall, type Maze, type Tile } from "./maze";
-import { LIGHT_SHADER, LIGHT_UNIFORMS } from "./lightShader";
+import { fogDarkFromFuel, LIGHT_SHADER, LIGHT_UNIFORMS } from "./lightShader";
 
 /** Smaller screen side always shows this many tiles (fewer in portrait for bigger tap targets). */
 const MIN_VISIBLE_TILES = 12;
@@ -43,6 +43,9 @@ export function paletteFor(level: number): Palette {
 
 /** The camera may scroll this far past the maze edge so the HUD never covers the player. */
 const EDGE_PADDING = 1.5;
+/** How quickly outer fog tracks fuel: lightening (solve) is snappier than darkening (burn). */
+const FOG_DARKEN_RATE = 2.2;
+const FOG_LIGHTEN_RATE = 6.5;
 
 function clampAxis(p: number, size: number, view: number): number {
   if (size + EDGE_PADDING * 2 <= view) return (size - 1) / 2;
@@ -66,6 +69,8 @@ export interface FrameState {
   revealMap?: boolean;
   /** Fuel critically low — pulse light and character aura. */
   criticalFuel?: boolean;
+  /** Candle fuel 0..1 — drives hand-candle look and fog darkening. */
+  fuel?: number;
 }
 
 /** Top-down orthographic view of the maze, player, exit and the candle-light post-process. */
@@ -80,7 +85,8 @@ export class MazeView {
   private maze: Maze | null = null;
   private cam = { x: 0, y: 0, viewW: MIN_VISIBLE_TILES, viewH: MIN_VISIBLE_TILES };
   private snapCamera = true;
-  private light = { x: 0, y: 0, radius: 0, warmth: 0, time: 0, reveal: 0, danger: 0 };
+  private shownFogDark = 0;
+  private light = { x: 0, y: 0, radius: 0, warmth: 0, time: 0, reveal: 0, danger: 0, fogDark: 0 };
 
   constructor(private readonly scene: Scene) {
     this.camera = new TargetCamera("camera", new Vector3(0, 0, -10), scene);
@@ -105,6 +111,7 @@ export class MazeView {
       effect.setFloat("uWarmth", this.light.warmth);
       effect.setFloat("uReveal", this.light.reveal);
       effect.setFloat("uDanger", this.light.danger);
+      effect.setFloat("uFogDark", this.light.fogDark);
     };
   }
 
@@ -142,6 +149,7 @@ export class MazeView {
     this.door.setPosition(maze.exit.x, -maze.exit.y);
     this.exitPath.setVisible(false);
     this.snapCamera = true;
+    this.shownFogDark = 0;
   }
 
   openDoor(): void {
@@ -169,7 +177,8 @@ export class MazeView {
     this.camera.orthoBottom = -viewH / 2;
 
     this.character.root.position.set(frame.player.x, -frame.player.y, 0);
-    this.character.update(dt, frame.time, frame.moving, frame.facing, frame.warmth);
+    const fuel = frame.fuel ?? 1;
+    this.character.update(dt, frame.time, frame.moving, frame.facing, frame.warmth, fuel);
     this.door.update(dt, frame.time);
 
     const showPath = !!frame.showExitPath;
@@ -177,6 +186,10 @@ export class MazeView {
     if (showPath && frame.pathFrom) {
       this.exitPath.update(this.maze, frame.player, frame.pathFrom, this.maze.exit, frame.time);
     }
+
+    const fogTarget = fogDarkFromFuel(fuel);
+    const fogRate = fogTarget > this.shownFogDark ? FOG_DARKEN_RATE : FOG_LIGHTEN_RATE;
+    this.shownFogDark += (fogTarget - this.shownFogDark) * Math.min(1, dt * fogRate);
 
     this.light = {
       x: frame.player.x,
@@ -186,6 +199,15 @@ export class MazeView {
       time: frame.time,
       reveal: frame.revealMap ? 1 : 0,
       danger: frame.criticalFuel ? 1 : 0,
+      fogDark: this.shownFogDark,
+    };
+  }
+
+  /** Normalized screen position of a world point (0..1 within the canvas). */
+  worldToScreen(x: number, y: number): { u: number; v: number } {
+    return {
+      u: (x - this.cam.x) / this.cam.viewW + 0.5,
+      v: (y - this.cam.y) / this.cam.viewH + 0.5,
     };
   }
 

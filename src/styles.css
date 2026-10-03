@@ -663,15 +663,19 @@ button {
   padding: max(10px, env(safe-area-inset-top)) 12px 0;
 }
 
-.hud-bottom-left {
+.hud-status {
   position: absolute;
-  left: 12px;
+  left: 50%;
   bottom: max(10px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   gap: 8px;
+  max-width: calc(100% - 24px);
   pointer-events: none;
+  z-index: 2;
 }
 
 .hud-left {
@@ -683,16 +687,12 @@ button {
 
 .hud-level,
 .hud-meter,
-.hud-info {
+.hud-solves {
   padding: 6px 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.85);
   box-shadow: 0 2px 8px rgba(80, 60, 20, 0.12);
   font-weight: 800;
-}
-
-.hud-info:empty {
-  display: none;
 }
 
 .hud-meter {
@@ -728,6 +728,54 @@ button {
 .hud-meter.critical .hud-meter-fill {
   background: linear-gradient(90deg, #c41010, #ff4d4d);
   animation: blink 0.35s ease-in-out infinite alternate;
+}
+
+.hud-map-meter.done {
+  background: rgba(220, 255, 230, 0.92);
+}
+
+.hud-map-meter.done .hud-meter-track {
+  background: #c8f0d6;
+}
+
+.hud-map-meter.done .hud-meter-fill {
+  background: linear-gradient(90deg, #2fb85a, #3dcc6e);
+}
+
+.hud-toast {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -100%);
+  max-width: min(280px, 70%);
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 4px 14px rgba(80, 60, 20, 0.18);
+  font-weight: 800;
+  font-size: 0.9rem;
+  text-align: center;
+  line-height: 1.25;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.hud-toast.visible {
+  opacity: 1;
+}
+
+@media (min-width: 900px) {
+  .hud-status {
+    bottom: max(14px, env(safe-area-inset-bottom));
+    flex-wrap: nowrap;
+    gap: 14px;
+  }
+
+  .hud-status .hud-meter-track {
+    width: clamp(100px, 14vw, 160px);
+  }
 }
 
 @keyframes blink {
@@ -810,6 +858,95 @@ button {
   }
   .hud-support {
     padding: 0.4em 0.75em;
+  }
+}
+
+/* ---------- First-run coach ---------- */
+
+.coach-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.coach-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(28, 22, 14, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  pointer-events: auto;
+}
+
+.coach-card {
+  position: absolute;
+  left: 50%;
+  bottom: var(--coach-card-bottom, 30%);
+  transform: translateX(-50%);
+  z-index: 32;
+  width: min(340px, calc(100% - 32px));
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #fffdf8;
+  box-shadow: 0 8px 28px rgba(40, 28, 12, 0.28);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.coach-message {
+  margin: 0 0 12px;
+  font-weight: 800;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.coach-btn {
+  width: 100%;
+  min-height: 48px;
+}
+
+/* Task tip: dim only the maze/HUD; keep the math panel bright. */
+.game-root.coach-focus-task .coach-scrim {
+  /* Scrim is inside .coach-layer; clip it to the stage band via height. */
+  bottom: var(--coach-card-bottom, 30%);
+  top: 0;
+}
+
+.game-root.coach-focus-task .task-panel.coach-spotlight {
+  position: relative;
+  z-index: 31;
+  box-shadow: 0 -4px 16px rgba(80, 60, 20, 0.1), 0 0 0 3px rgba(255, 184, 77, 0.9);
+}
+
+/* Fuel tip: full-screen scrim; meter is reparented above it. */
+.game-root.coach-focus-fuel .coach-scrim {
+  inset: 0;
+}
+
+.hud-meter.coach-spotlight-float {
+  position: fixed;
+  z-index: 33;
+  margin: 0;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 184, 77, 0.95), 0 4px 18px rgba(80, 60, 20, 0.25);
+  animation: coach-pulse 0.9s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.coach-meter-placeholder {
+  flex: none;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@keyframes coach-pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.04);
   }
 }
 
