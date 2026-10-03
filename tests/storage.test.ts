@@ -17,7 +17,26 @@ describe("progress storage", () => {
   it("defaults to normal difficulty at level 1", () => {
     const p = loadProgress("game");
     expect(p.difficulty).toBe("normal");
-    expect(p.levels).toEqual({ easy: 1, normal: 1, hard: 1, hardcore: 1 });
+    expect(p.levels).toEqual({ easy: 1, normal: 1, hard: 1, hardcore: 1, custom: 1 });
+    expect(p.customMath).toEqual({ mul: true, div: false, tables: [2, 3, 4, 5] });
+  });
+
+  it("persists and sanitizes customMath", () => {
+    updateProgress("game", (p) => {
+      p.difficulty = "custom";
+      p.customMath = { mul: false, div: true, tables: [2, 7, 7, 99, 10, 15, 20] };
+    });
+    const p = loadProgress("game");
+    expect(p.difficulty).toBe("custom");
+    expect(p.customMath).toEqual({ mul: false, div: true, tables: [2, 7, 10, 15, 20] });
+  });
+
+  it("falls back when customMath is invalid", () => {
+    store.set(
+      "saveyobrain:v1:game",
+      JSON.stringify({ difficulty: "custom", levels: { custom: 3 }, customMath: { mul: false, div: false, tables: [] } }),
+    );
+    expect(loadProgress("game").customMath).toEqual({ mul: true, div: false, tables: [2, 3, 4, 5] });
   });
 
   it("keeps levels per difficulty", () => {

@@ -1139,6 +1139,13 @@ button {
   margin-top: 16px;
 }
 
+.modal-choices-wide {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
 .btn-choice {
   flex-direction: column;
   align-items: flex-start;
@@ -1151,6 +1158,60 @@ button {
 .btn-choice.selected {
   border-color: var(--primary);
   background: #fff1e3;
+}
+
+.btn-choice-wide {
+  width: 100%;
+}
+
+.custom-setup-card .custom-setup-label {
+  margin: 14px 0 8px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.custom-setup-card .custom-setup-hint {
+  margin: 10px 0 0;
+  color: var(--bad, #c41010);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.custom-toggles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.custom-chips {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.custom-toggle,
+.custom-chip {
+  min-height: 44px;
+  border-radius: 12px;
+}
+
+.custom-toggle.selected,
+.custom-chip.selected {
+  border-color: var(--primary);
+  background: #fff1e3;
+}
+
+.custom-load-more {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  border-style: dashed;
+}
+
+@media (max-width: 420px) {
+  .custom-chips {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .btn-hint {

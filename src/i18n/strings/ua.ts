@@ -41,10 +41,18 @@ export const ua: Strings = {
     normal: "Звичайний",
     hard: "Складний",
     hardcore: "Хардкор",
+    custom: "Власний",
   } satisfies Record<Difficulty, string>,
   difficultyLine: (name) => `Складність: ${name}`,
   selectDifficulty: "Обрати складність",
   back: "Назад",
+  customSetupTitle: "Власна практика",
+  customOperations: "Дії",
+  customMultiplication: "Множення",
+  customDivision: "Ділення",
+  customTables: "Таблиця множення",
+  customNeedSelection: "Оберіть хоча б одну дію і одне число.",
+  customLoadMore: "Ще",
 
   chrome: {
     about: "Про проєкт",
@@ -85,6 +93,7 @@ export const ua: Strings = {
       normal: "Більші лабіринти, математика ускладнюється швидше. Поспіх без відповідей погасить полум'я.",
       hard: "Великі лабіринти, складніші задачі з самого початку. Відповідайте, інакше свічка згасне.",
       hardcore: "Вечезні лабіринти, крихітне мерехтливе світло, важка математика. Кожен крок щось коштує. Удачі!",
+      custom: "Практикуйте обрані таблиці множення. Легкий лабіринт, числа ростуть із рівнем.",
     } satisfies Record<Difficulty, string>,
   },
 };

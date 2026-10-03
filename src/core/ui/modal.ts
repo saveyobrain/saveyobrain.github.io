@@ -7,6 +7,8 @@ export interface ModalButton {
   primary?: boolean;
   /** Marks the current choice in a list of options. */
   selected?: boolean;
+  /** Full-width row under the 2-column choice grid (e.g. Custom difficulty). */
+  wide?: boolean;
   /** If set, renders as a link instead of a button. */
   href?: string;
   /** Open href in a new tab (default true for http(s) links). */
@@ -60,20 +62,26 @@ function button(b: ModalButton, baseClass: string): HTMLElement {
 
 /** Centered card over the game area; used for intro, pause, win and lose screens. */
 export function showModal(parent: HTMLElement, options: ModalOptions): Modal {
-  const choices = (options.choices ?? []).map((b) => button(b, "btn btn-choice"));
+  const choiceOpts = options.choices ?? [];
+  const gridOpts = choiceOpts.filter((b) => !b.wide);
+  const wideOpts = choiceOpts.filter((b) => b.wide);
+  const gridChoices = gridOpts.map((b) => button(b, "btn btn-choice"));
+  const wideChoices = wideOpts.map((b) => button(b, "btn btn-choice btn-choice-wide"));
   const buttons = options.buttons.map((b) => button(b, "btn"));
   const card = h(
     "div",
     { class: "modal-card", role: "dialog", "aria-modal": "true" },
     h("h2", {}, options.title),
     ...(options.lines ?? []).map((line) => h("p", {}, line)),
-    choices.length > 0 && h("div", { class: "modal-choices" }, ...choices),
+    gridChoices.length > 0 && h("div", { class: "modal-choices" }, ...gridChoices),
+    wideChoices.length > 0 && h("div", { class: "modal-choices-wide" }, ...wideChoices),
     h("div", { class: "modal-buttons" }, ...buttons),
   );
   const el = h("div", { class: "modal" }, card);
   parent.append(el);
+  const allChoiceBtns = [...gridChoices, ...wideChoices];
   const focusTarget =
-    choices[(options.choices ?? []).findIndex((b) => b.selected)] ??
+    allChoiceBtns[choiceOpts.findIndex((b) => b.selected)] ??
     buttons[options.buttons.findIndex((b) => b.primary)] ??
     buttons[0];
   focusTarget?.focus({ preventScroll: true });
