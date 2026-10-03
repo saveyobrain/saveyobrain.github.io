@@ -669,13 +669,33 @@ button {
   bottom: max(10px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
   align-items: center;
-  gap: 8px;
-  max-width: calc(100% - 24px);
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100% - 16px);
   pointer-events: none;
   z-index: 2;
+}
+
+/* Prefer full bar width; only shrink when the row hits max-width. */
+.hud-status .hud-meter {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  gap: 4px;
+}
+
+.hud-status .hud-meter-track {
+  width: clamp(72px, 22vw, 160px);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.hud-status .hud-solves {
+  flex: 0 0 auto;
+  padding: 5px 8px;
 }
 
 .hud-left {
@@ -769,12 +789,22 @@ button {
 @media (min-width: 900px) {
   .hud-status {
     bottom: max(14px, env(safe-area-inset-bottom));
-    flex-wrap: nowrap;
     gap: 14px;
+  }
+
+  .hud-status .hud-meter {
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    gap: 6px;
   }
 
   .hud-status .hud-meter-track {
     width: clamp(100px, 14vw, 160px);
+    flex: 0 0 auto;
+  }
+
+  .hud-status .hud-solves {
+    padding: 6px 12px;
   }
 }
 
