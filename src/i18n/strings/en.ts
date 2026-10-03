@@ -40,10 +40,18 @@ export const en: Strings = {
     normal: "Normal",
     hard: "Hard",
     hardcore: "Hardcore",
+    custom: "Custom",
   } satisfies Record<Difficulty, string>,
   difficultyLine: (name) => `Difficulty: ${name}`,
   selectDifficulty: "Select difficulty",
   back: "Back",
+  customSetupTitle: "Custom practice",
+  customOperations: "Operations",
+  customMultiplication: "Multiplication",
+  customDivision: "Division",
+  customTables: "Times tables",
+  customNeedSelection: "Pick at least one operation and one number.",
+  customLoadMore: "More",
 
   chrome: {
     about: "About",
@@ -84,6 +92,7 @@ export const en: Strings = {
       normal: "Bigger mazes, math grows quicker. Rushing without solving will snuff you out.",
       hard: "Large mazes, harder math from the start. Keep answering or the flame dies.",
       hardcore: "Huge mazes, a tiny flickering light, tough math. Every step costs you. Good luck!",
+      custom: "Practice chosen times tables. Easy maze, numbers grow with the level.",
     } satisfies Record<Difficulty, string>,
   },
 };

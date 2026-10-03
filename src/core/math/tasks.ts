@@ -152,8 +152,9 @@ const GENERATORS: Record<TaskKind, (t: Tier, r: Rng, allowTrivial: boolean) => R
   twoStep: (t, r) => twoStep(t, r),
 };
 
-function pickKind(tier: Tier, r: Rng): TaskKind {
-  const entries = Object.entries(tier.kinds) as [TaskKind, number][];
+function pickKind(kinds: Partial<Record<TaskKind, number>>, r: Rng): TaskKind {
+  const entries = Object.entries(kinds).filter(([, w]) => (w ?? 0) > 0) as [TaskKind, number][];
+  if (entries.length === 0) return "mul";
   const total = entries.reduce((s, [, w]) => s + w, 0);
   let roll = r.next() * total;
   for (const [kind, w] of entries) {
@@ -161,6 +162,21 @@ function pickKind(tier: Tier, r: Rng): TaskKind {
     if (roll < 0) return kind;
   }
   return entries[entries.length - 1][0];
+}
+
+function customMul(tables: number[], otherMax: number, r: Rng): RawTask {
+  const table = r.pick(tables);
+  const other = r.int(1, otherMax);
+  const [a, b] = r.next() < 0.5 ? [table, other] : [other, table];
+  const p = a * b;
+  return { text: `${a} ${TIMES} ${b}`, answer: p, near: [p + a, p - a, p + b, p - b, a + b, p + 1, p - 1] };
+}
+
+function customDiv(tables: number[], otherMax: number, r: Rng): RawTask {
+  const b = r.pick(tables);
+  const q = r.int(1, otherMax);
+  const a = b * q;
+  return { text: `${a} ${DIVIDE} ${b}`, answer: q, near: [q + 1, q - 1, q + 2, q - 2, a - b, b] };
 }
 
 function isValidOption(v: number): boolean {
@@ -185,6 +201,13 @@ function buildOptions(raw: RawTask, count: number, r: Rng): number[] {
 export interface GenerateTaskOptions {
   /** Allow ±1, ×1, and n÷n style tasks (Easy level 1 only). */
   allowTrivial?: boolean;
+  /**
+   * Custom times-table practice: factors from `tables`, complementary 1…otherMax.
+   * When set, only mul/div from `kinds` (or both) are generated with 2 options.
+   */
+  tables?: readonly number[];
+  otherMax?: number;
+  kinds?: Partial<Record<TaskKind, number>>;
 }
 
 export function generateTask(
@@ -195,8 +218,26 @@ export function generateTask(
 ): MathTask {
   const tier = getTier(tierIndex);
   const allowTrivial = options.allowTrivial === true;
+  const tables = options.tables?.filter((n) => Number.isInteger(n) && n >= 2) ?? [];
+  const custom = tables.length > 0;
+  const otherMax = Math.max(1, Math.floor(options.otherMax ?? 9));
+  const customKinds: Partial<Record<TaskKind, number>> = {
+    mul: options.kinds?.mul ? 1 : 0,
+    div: options.kinds?.div ? 1 : 0,
+  };
+  if (custom && !customKinds.mul && !customKinds.div) {
+    customKinds.mul = 1;
+    customKinds.div = 1;
+  }
+
   for (let attempt = 0; ; attempt++) {
-    const kind = pickKind(tier, rng);
+    if (custom) {
+      const kind = pickKind(customKinds, rng) === "div" ? "div" : "mul";
+      const raw = kind === "mul" ? customMul(tables, otherMax, rng) : customDiv(tables, otherMax, rng);
+      if (attempt < 10 && previous && previous.text === raw.text) continue;
+      return { kind, text: raw.text, answer: raw.answer, options: buildOptions(raw, 2, rng) };
+    }
+    const kind = pickKind(options.kinds ?? tier.kinds, rng);
     const raw = GENERATORS[kind](tier, rng, allowTrivial);
     if (attempt < 10 && previous && previous.text === raw.text) continue;
     return { kind, text: raw.text, answer: raw.answer, options: buildOptions(raw, tier.options, rng) };

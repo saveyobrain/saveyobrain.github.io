@@ -36,6 +36,13 @@ export interface Strings {
   difficultyLine: (name: string) => string;
   selectDifficulty: string;
   back: string;
+  customSetupTitle: string;
+  customOperations: string;
+  customMultiplication: string;
+  customDivision: string;
+  customTables: string;
+  customNeedSelection: string;
+  customLoadMore: string;
 
   chrome: {
     about: string;

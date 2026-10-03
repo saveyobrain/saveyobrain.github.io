@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createRng } from "../src/core/math/rng";
 import { distancesFrom, findPath, generateMaze, isWall } from "../src/games/save-the-light/maze";
-import { levelConfig } from "../src/games/save-the-light/levels";
-import { DIFFICULTIES } from "../src/core/difficulty";
+import { customOtherMax, levelConfig } from "../src/games/save-the-light/levels";
+import { DIFFICULTIES, PRESET_DIFFICULTIES } from "../src/core/difficulty";
 import { getTier } from "../src/core/math/tiers";
 
 describe("generateMaze", () => {
@@ -60,9 +60,9 @@ describe("levelConfig", () => {
     expect(b.mathTier).toBeGreaterThan(a.mathTier);
   });
 
-  it("each difficulty is harder than the previous one", () => {
+  it("each preset difficulty is harder than the previous one", () => {
     for (const level of [1, 5, 10]) {
-      const configs = DIFFICULTIES.map((d) => levelConfig(level, d));
+      const configs = PRESET_DIFFICULTIES.map((d) => levelConfig(level, d));
       for (let i = 1; i < configs.length; i++) {
         const [prev, cur] = [configs[i - 1], configs[i]];
         expect(cur.burnPerSecond).toBeGreaterThan(prev.burnPerSecond);
@@ -92,8 +92,8 @@ describe("levelConfig", () => {
     expect(fuelForMinSprint(levelConfig(1, "easy"))).toBeLessThan(1);
   });
 
-  it("sprint fuel cost rises with difficulty", () => {
-    const costs = DIFFICULTIES.map((d) => fuelForMinSprint(levelConfig(1, d)));
+  it("sprint fuel cost rises with preset difficulty", () => {
+    const costs = PRESET_DIFFICULTIES.map((d) => fuelForMinSprint(levelConfig(1, d)));
     for (let i = 1; i < costs.length; i++) {
       expect(costs[i]).toBeGreaterThan(costs[i - 1]);
     }
@@ -105,8 +105,22 @@ describe("levelConfig", () => {
   });
 
   it("level 1 math: easy up to 6, normal up to 10, hard up to 15, hardcore up to 20", () => {
-    const addMax = (d: (typeof DIFFICULTIES)[number]) => getTier(levelConfig(1, d).mathTier).addMax;
-    expect(DIFFICULTIES.map(addMax)).toEqual([6, 10, 15, 20]);
+    const addMax = (d: (typeof PRESET_DIFFICULTIES)[number]) => getTier(levelConfig(1, d).mathTier).addMax;
+    expect(PRESET_DIFFICULTIES.map(addMax)).toEqual([6, 10, 15, 20]);
+  });
+
+  it("custom: maze grows with level and burn matches Easy", () => {
+    const l1 = levelConfig(1, "custom");
+    const l5 = levelConfig(5, "custom");
+    expect(l5.cellsWide).toBeGreaterThan(l1.cellsWide);
+    expect(l5.burnPerSecond).toBeGreaterThan(l1.burnPerSecond);
+    expect(l5.burnPerSecond).toBeCloseTo(levelConfig(5, "easy").burnPerSecond, 8);
+    expect(l5.moveBurnPerSecond).toBeCloseTo(levelConfig(5, "easy").moveBurnPerSecond, 8);
+    expect(customOtherMax(1)).toBe(3);
+    expect(customOtherMax(2)).toBe(5);
+    expect(customOtherMax(3)).toBe(7);
+    expect(customOtherMax(4)).toBe(9);
+    expect(customOtherMax(9)).toBe(9);
   });
 
   it("math gets harder every level from normal up, every two levels on easy", () => {

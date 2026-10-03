@@ -4,19 +4,20 @@ import type { GameContext, GameInstance, GameRuntime, StartOptions } from "../..
 import { createKeyboard, type InputEvent } from "../../core/input";
 import { createRng } from "../../core/math/rng";
 import { generateTask, type MathTask } from "../../core/math/tasks";
-import { DIFFICULTIES, type Difficulty } from "../../core/difficulty";
-import { loadProgress, updateProgress } from "../../core/storage";
+import { PRESET_DIFFICULTIES, type Difficulty } from "../../core/difficulty";
+import { defaultCustomMath, loadProgress, updateProgress, type CustomMathSettings } from "../../core/storage";
 import { track } from "../../analytics";
 import { SUPPORT_PAGE_PATH } from "../../config";
 import { h } from "../../core/ui/dom";
 import { createCoach, loadCoachFlags, markCoachFlag } from "../../core/ui/coach";
+import { showCustomMathSetup } from "../../core/ui/customMathSetup";
 import { createHud, type MapProgressPhase } from "../../core/ui/hud";
 import { showModal, type Modal, type ModalButton } from "../../core/ui/modal";
 import { createTaskPanel } from "../../core/ui/taskPanel";
 import { localizePath } from "../../i18n/locales";
 import { getActiveLocale, getStrings } from "../../i18n/strings";
 import { Candle } from "./candle";
-import { levelConfig, type LevelConfig } from "./levels";
+import { customOtherMax, levelConfig, type LevelConfig } from "./levels";
 import { findPath, generateMaze, isWall, type Maze, type Tile } from "./maze";
 import { Player } from "./player";
 import { MazeView, paletteFor } from "./render";
@@ -74,6 +75,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   let modal: Modal | null = null;
   const saved = loadProgress(GAME_ID);
   let difficulty: Difficulty = saved.difficulty;
+  let customMath: CustomMathSettings = saved.customMath ?? defaultCustomMath();
   let level = options.level ?? saved.levels[difficulty];
   let cfg: LevelConfig = levelConfig(level, difficulty);
   let maze: Maze;
@@ -180,9 +182,20 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function nextTask(): void {
-    task = generateTask(cfg.mathTier, rng, task, {
-      allowTrivial: level === 1 && difficulty === "easy",
-    });
+    if (difficulty === "custom") {
+      task = generateTask(cfg.mathTier, rng, task, {
+        tables: customMath.tables,
+        otherMax: customOtherMax(level),
+        kinds: {
+          mul: customMath.mul ? 1 : 0,
+          div: customMath.div ? 1 : 0,
+        },
+      });
+    } else {
+      task = generateTask(cfg.mathTier, rng, task, {
+        allowTrivial: level === 1 && difficulty === "easy",
+      });
+    }
     panel.show(task);
     panel.setEnabled(state === "playing");
   }
@@ -232,17 +245,59 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   function showDifficultyPicker(): void {
     openModal({
       title: strings.selectDifficulty,
-      choices: DIFFICULTIES.map((d) => ({
-        label: strings.difficulty[d],
-        hint: t.difficultyHints[d],
-        selected: d === difficulty,
-        onClick: () => chooseDifficulty(d),
-      })),
+      choices: [
+        ...PRESET_DIFFICULTIES.map((d) => ({
+          label: strings.difficulty[d],
+          hint: t.difficultyHints[d],
+          selected: d === difficulty,
+          onClick: () => chooseDifficulty(d),
+        })),
+        {
+          label: strings.difficulty.custom,
+          hint: t.difficultyHints.custom,
+          selected: difficulty === "custom",
+          wide: true,
+          onClick: () => showCustomSetup(),
+        },
+      ],
       buttons: [{ label: strings.back, primary: true, onClick: showIntro }],
     });
   }
 
+  function showCustomSetup(): void {
+    closeModal();
+    modal = showCustomMathSetup(
+      ctx.root,
+      customMath,
+      {
+        title: strings.customSetupTitle,
+        operationsLabel: strings.customOperations,
+        multiplication: strings.customMultiplication,
+        division: strings.customDivision,
+        tablesLabel: strings.customTables,
+        needSelection: strings.customNeedSelection,
+        loadMore: strings.customLoadMore,
+        start: strings.start,
+        back: strings.back,
+      },
+      (settings) => {
+        customMath = settings;
+        difficulty = "custom";
+        level = updateProgress(GAME_ID, (p) => {
+          p.difficulty = "custom";
+          p.customMath = settings;
+        }).levels.custom;
+        setupLevel();
+      },
+      () => showDifficultyPicker(),
+    );
+  }
+
   function chooseDifficulty(next: Difficulty): void {
+    if (next === "custom") {
+      showCustomSetup();
+      return;
+    }
     if (next === difficulty) {
       showIntro();
       return;

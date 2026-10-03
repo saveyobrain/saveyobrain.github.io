@@ -53,7 +53,18 @@ const TUNING: Record<Difficulty, DifficultyTuning> = {
   normal: { burn: 0.75, moveBurn: 5, lifeScale: 0.6, fuel: 0.9, penalty: 1, light: 0.95, extraCells: 1, firstTier: 1, levelsPerTier: 1, mapSpawnCoef: 2, mapRevealsFog: false },
   hard: { burn: 0.8, moveBurn: 7, lifeScale: 0.5, fuel: 0.8, penalty: 1.25, light: 0.85, extraCells: 2, firstTier: 2, levelsPerTier: 1, mapSpawnCoef: 2.5, mapRevealsFog: false },
   hardcore: { burn: 0.9, moveBurn: 10, lifeScale: 0.5, fuel: 0.7, penalty: 1.5, light: 0.72, extraCells: 3, firstTier: 3, levelsPerTier: 1, mapSpawnCoef: 3, mapRevealsFog: false },
+  // Custom: Easy maze/life/burn; math is player-picked times tables.
+  custom: { burn: 0.6, moveBurn: 3, lifeScale: 0.7, fuel: 1, penalty: 1, light: 1, extraCells: 0, firstTier: 0, levelsPerTier: 99, mapSpawnCoef: 1, mapRevealsFog: false },
 };
+
+/** Complementary factor upper bound for Custom times-table practice. */
+export function customOtherMax(level: number): number {
+  const n = Math.max(1, Math.floor(level));
+  if (n <= 1) return 3;
+  if (n === 2) return 5;
+  if (n === 3) return 7;
+  return 9;
+}
 
 export function levelConfig(level: number, difficulty: Difficulty): LevelConfig {
   const n = Math.max(1, Math.floor(level));

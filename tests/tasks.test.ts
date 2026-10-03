@@ -89,4 +89,36 @@ describe("generateTask", () => {
     const b = createRng(99);
     for (let i = 0; i < 50; i++) expect(generateTask(4, a)).toEqual(generateTask(4, b));
   });
+
+  it("custom mul: one factor from tables, other from 1…otherMax", () => {
+    const tables = [2, 5, 10];
+    const otherMax = 3;
+    const rng = createRng(11);
+    for (let i = 0; i < 500; i++) {
+      const task = generateTask(0, rng, undefined, { tables, otherMax, kinds: { mul: 1 } });
+      expect(task.kind).toBe("mul");
+      expect(task.options).toHaveLength(2);
+      const [a, b] = task.text.split(/ [^\d] /).map(Number);
+      expect(tables.includes(a) || tables.includes(b), task.text).toBe(true);
+      // Complementary factor is always ≤ otherMax (may also be in the tables set).
+      expect(a <= otherMax || b <= otherMax, task.text).toBe(true);
+      expect(solve(task.text)).toBe(task.answer);
+    }
+  });
+
+  it("custom div: divisor from tables, quotient from 1…otherMax", () => {
+    const tables = [3, 7];
+    const otherMax = 5;
+    const rng = createRng(22);
+    for (let i = 0; i < 500; i++) {
+      const task = generateTask(0, rng, undefined, { tables, otherMax, kinds: { div: 1 } });
+      expect(task.kind).toBe("div");
+      expect(task.options).toHaveLength(2);
+      const [, b] = task.text.split(/ [^\d] /).map(Number);
+      expect(tables, task.text).toContain(b);
+      expect(task.answer, task.text).toBeGreaterThanOrEqual(1);
+      expect(task.answer, task.text).toBeLessThanOrEqual(otherMax);
+      expect(solve(task.text)).toBe(task.answer);
+    }
+  });
 });
