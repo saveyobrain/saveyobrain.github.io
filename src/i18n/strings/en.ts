@@ -13,12 +13,12 @@ export const en: Strings = {
   supportShort: "Support",
   shareFeedback: "Share your feedback",
 
-  hubHeadline: "Free games to keep your brain strong.",
+  hubHeadline: "Free math and time tables games to keep your brain strong.",
   hubIntro:
     "Math is a basic skill, just like reading and writing. Play a little every day to build it up and keep it sharp.",
   hubNote: "Play right away, no account needed. Progress is saved in your browser.",
   playGame: (title) => `Play ${title}`,
-  homeTitle: `${SITE_NAME} — Free math games in your browser`,
+  homeTitle: `Free math & time tables games in your browser - ${SITE_NAME}`,
   homeDescription: "Free browser games that help kids and grown-ups build and keep their math skills.",
 
   menu: "Menu",
