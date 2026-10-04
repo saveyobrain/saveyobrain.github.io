@@ -60,6 +60,8 @@ export interface Strings {
 
   stl: {
     title: string;
+    /** Browser / Open Graph title for the game page. */
+    pageTitle: string;
     description: string;
     introGoal: string;
     controls: string;

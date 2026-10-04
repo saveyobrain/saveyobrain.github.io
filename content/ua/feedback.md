@@ -1,7 +1,7 @@
 ---
 title: Залишити відгук
 description: Поділіться ідеями, повідомте про помилки або просто скажіть добре слово про Save Yo Brain.
-embedUrl: https://docs.google.com/forms/d/e/1FAIpQLSdfjgMoOUw0DBkMYDs1Q6JeXNQ09fTrczsQNTDfB8COX8snkA/viewform?embedded=true
+embedUrl: https://docs.google.com/forms/d/e/1FAIpQLScuiiKGf5HdM59y7R3IK32U5jfo4yZvNEwPLt1iRd5hi-oAyQ/viewform?embedded=true
 embedTitle: Форма відгуку
 afterEmbed: |
   <aside class="cookie-notice" role="note"><img class="cookie-notice-icon" src="/cookie.svg" width="36" height="36" alt="" /><span>Цю форму розміщено на Google, вони можуть встановлювати файли cookie.</span></aside>
@@ -19,4 +19,4 @@ afterEmbed: |
 
 Будемо раді почути вас — ідеї нових ігор, знайдені помилки або все, що зробить тренування цікавішим.
 
-Скористайтеся формою нижче. Якщо вона не завантажується, перевірте з'єднання з мережею або [відкрийте форму в новій вкладці](https://forms.gle/dskxjxmu7NDkUY1b8). Також можете [написати нам у Discord](https://discord.gg/v8EGtW688).
+Скористайтеся формою нижче. Якщо вона не завантажується, перевірте з'єднання з мережею або [відкрийте форму в новій вкладці](https://forms.gle/HtuzpqgUrTvGVdQE9). Також можете [написати нам у Discord](https://discord.gg/v8EGtW688).

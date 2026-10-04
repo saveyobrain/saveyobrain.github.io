@@ -13,12 +13,12 @@ export const en: Strings = {
   supportShort: "Support",
   shareFeedback: "Share your feedback",
 
-  hubHeadline: "Free math and time tables games to keep your brain strong.",
+  hubHeadline: "Free math and times tables games to keep your brain strong.",
   hubIntro:
     "Math is a basic skill, just like reading and writing. Play a little every day to build it up and keep it sharp.",
   hubNote: "Play right away, no account needed. Progress is saved in your browser.",
   playGame: (title) => `Play ${title}`,
-  homeTitle: `Free math & time tables games in your browser - ${SITE_NAME}`,
+  homeTitle: `Free math & times tables games in your browser - ${SITE_NAME}`,
   homeDescription: "Free browser games that help kids and grown-ups build and keep their math skills.",
 
   menu: "Menu",
@@ -69,6 +69,7 @@ export const en: Strings = {
 
   stl: {
     title: "Save the Light",
+    pageTitle: "Save the Light free math & times tables game - Save Yo Brain",
     description: "Find the exit of a maze. Solve math tasks to keep your candle burning!",
     introGoal: "Find the exit. Solve tasks to keep your candle burning!",
     controls:
