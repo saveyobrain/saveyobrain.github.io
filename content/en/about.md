@@ -1,11 +1,11 @@
 ---
-title: About
-description: Why Save Yo Brain exists — a free web resource that helps people practise basic math every day.
+title: About our math & times tables games
+description: Save Yo Brain is a free web resource that helps people practise basic math and times tables every day.
 ---
 
 # About
 
-**Save Yo Brain** is a free web resource made to help children — and anyone else — build and keep their basic math skills.
+**Save Yo Brain** is a free web resource made to help children — and anyone else — build and keep their basic math and times tables skills.
 
 Basic math is a life skill, as important as reading and writing. Like any skill, it fades when it isn't used. These games turn short bursts of mental math into something simple and friendly, so you can practise a little every day.
 

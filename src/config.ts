@@ -11,15 +11,23 @@ export const CONTACT_URL = "https://github.com/saveyobrain/saveyobrain.github.io
 /** Discord community invite (keep in sync with links in content/about.md and content/feedback.md). */
 export const DISCORD_INVITE_URL = "https://discord.gg/v8EGtW688";
 
-/** Short link to the feedback form (open in new tab). */
+/** Short link to the English feedback form (open in new tab). */
 export const FEEDBACK_FORM_SHORT_URL = "https://forms.gle/dskxjxmu7NDkUY1b8";
+/** Short link to the Ukrainian feedback form (open in new tab). */
+export const FEEDBACK_FORM_SHORT_URL_UA = "https://forms.gle/HtuzpqgUrTvGVdQE9";
 
 /**
  * Google Form embed URL for /feedback/.
- * Keep in sync with `embedUrl` in content/feedback.md (build uses the Markdown frontmatter).
+ * Keep in sync with `embedUrl` in content/en/feedback.md (build uses the Markdown frontmatter).
  */
 export const FEEDBACK_FORM_URL =
   "https://docs.google.com/forms/d/e/1FAIpQLSdfjgMoOUw0DBkMYDs1Q6JeXNQ09fTrczsQNTDfB8COX8snkA/viewform?embedded=true";
+/**
+ * Google Form embed URL for /ua/feedback/.
+ * Keep in sync with `embedUrl` in content/ua/feedback.md.
+ */
+export const FEEDBACK_FORM_URL_UA =
+  "https://docs.google.com/forms/d/e/1FAIpQLScuiiKGf5HdM59y7R3IK32U5jfo4yZvNEwPLt1iRd5hi-oAyQ/viewform?embedded=true";
 
 /** Umami Cloud Hobby tracker (public website id; not a secret). */
 export const UMAMI_SCRIPT_URL = "https://cloud.umami.is/script.js";

@@ -229,7 +229,7 @@ export function renderHomeDocument(base: string, locale: LocaleCode): string {
 /** Minimal game shell for a locale. */
 export function renderGameDocument(base: string, locale: LocaleCode): string {
   const s = getStrings(locale);
-  const title = `${s.stl.title} - ${s.siteName}`;
+  const title = s.stl.pageTitle;
   const description = s.stl.description;
   const canonical = absoluteLocaleUrl(SITE_ORIGIN, "games/save-the-light/", locale);
   const hreflang = renderHreflangLinks("games/save-the-light/");
