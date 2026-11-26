@@ -177,7 +177,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function releaseInbound(label: number): void {
-    const p = pickApproachSpawn(rng);
+    const p = pickApproachSpawn(rng, view.playFrustum());
     bodies.push({
       id: String(nextId++),
       kind: "asteroid",
@@ -195,7 +195,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function releaseBonus(): void {
-    const p = pickApproachSpawn(rng);
+    const p = pickApproachSpawn(rng, view.playFrustum());
     bodies.push({
       id: String(nextId++),
       kind: "bonus",

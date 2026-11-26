@@ -74,10 +74,8 @@ export const PLAYFIELD_HALF = 5.2;
 export const STATION_DECK_Y = 0.4;
 /** Asteroids hit the station when they reach this height. */
 export const IMPACT_Y = 1.7;
-/** Just above the camera frustum top (rocks enter from over the horizon). */
-export const OFFSCREEN_Y = 15.2;
-/** Past the left/right edges of the framed play column. */
-export const OFFSCREEN_X = 8.6;
+/** Margin past the live frustum edge so rocks start off-screen but enter fast. */
+export const FRUSTUM_MARGIN = 0.55;
 
 function litMat(scene: Scene, name: string, diffuse: Color3, emissive: Color3, specular = 0.35): StandardMaterial {
   const m = new StandardMaterial(name, scene);
@@ -399,6 +397,20 @@ export class SpaceView {
     return plane;
   }
 
+  /** Frustum half-extents at the play plane (z≈0) for off-screen spawn placement. */
+  playFrustum(): PlayFrustum {
+    const cam = this.camera;
+    const dist = Math.abs(cam.position.z); // looking toward z=0
+    const halfH = dist * Math.tan(cam.fov * 0.5);
+    const engine = this.scene.getEngine();
+    const aspect = Math.max(0.5, engine.getAspectRatio(cam));
+    return {
+      halfW: halfH * aspect,
+      halfH,
+      centerY: cam.position.y,
+    };
+  }
+
   /** Aim both cannons toward a world-space point (current target asteroid). */
   setAimTarget(target: { x: number; y: number; z: number } | null): void {
     this.aimTarget = target ? new Vector3(target.x, target.y, target.z) : null;
@@ -440,11 +452,11 @@ export class SpaceView {
     let baseDiffuse: Color3;
     let baseEmissive: Color3;
     if (kind === "bonus") {
-      root = CreateSphere(`body-${id}`, { diameter: 1.0, segments: 12 }, this.scene);
+      root = CreateSphere(`body-${id}`, { diameter: 1.15, segments: 12 }, this.scene);
       baseDiffuse = new Color3(0.25, 0.95, 0.7);
       baseEmissive = new Color3(0.15, 0.45, 0.3);
     } else {
-      root = createRockyMesh(this.scene, `body-${id}`, seed, 0.78);
+      root = createRockyMesh(this.scene, `body-${id}`, seed, 0.92);
       const palette = rockPalette(seed);
       baseDiffuse = palette.diffuse;
       baseEmissive = palette.emissive;
@@ -629,67 +641,77 @@ export interface ApproachSpawn {
   targetX: number;
 }
 
+/** Live frustum half-extents at the play plane (z≈0), from the game camera. */
+export interface PlayFrustum {
+  halfW: number;
+  halfH: number;
+  /** World Y of the camera aim / frustum center. */
+  centerY: number;
+}
+
 type ApproachKind = "overTop" | "left" | "right" | "cornerL" | "cornerR";
 
 /**
- * Always spawn past the framed viewport (over the horizon / off the sides),
- * then drift into view toward a deck aim point. Never mid-viewport empty space.
+ * Spawn strictly just outside the live frustum (top / sides / corners only),
+ * then drift into view. Never inside the visible rectangle.
  */
-export function pickApproachSpawn(rng: { next(): number; pick<T>(items: readonly T[]): T }): ApproachSpawn {
-  // Bias sides/corners so entries feel lateral, not only dropping from dead center.
+export function pickApproachSpawn(
+  rng: { next(): number; pick<T>(items: readonly T[]): T },
+  frustum: PlayFrustum,
+): ApproachSpawn {
+  const topY = frustum.centerY + frustum.halfH + FRUSTUM_MARGIN;
+  const botY = Math.max(IMPACT_Y + 2.2, frustum.centerY - frustum.halfH * 0.15);
+  const edgeX = frustum.halfW + FRUSTUM_MARGIN;
+  // Prefer top-edge entries so the first rock is visible quickly; still mix sides.
   const kind = rng.pick<ApproachKind>([
+    "overTop",
     "overTop",
     "overTop",
     "left",
     "right",
     "cornerL",
     "cornerR",
-    "left",
-    "right",
   ]);
   const targetX = (rng.next() * 2 - 1) * (PLAYFIELD_HALF * 0.55);
-  const z = (rng.next() - 0.5) * 0.55;
+  const z = (rng.next() - 0.5) * 0.35;
   switch (kind) {
     case "overTop": {
-      // Above the top of the frame; X can lean left/right but still off-screen in Y.
-      const lean = rng.pick([-1, 0, 1] as const);
-      const x =
-        lean === 0
-          ? (rng.next() * 2 - 1) * (PLAYFIELD_HALF * 0.9)
-          : lean * (OFFSCREEN_X * 0.55 + rng.next() * 1.8);
+      // Fully above the top edge; X stays inside the horizontal frame so it drops in cleanly.
+      const x = (rng.next() * 2 - 1) * (frustum.halfW * 0.85);
       return {
         x,
-        y: OFFSCREEN_Y + rng.next() * 2.4,
+        y: topY + rng.next() * 0.45,
         z,
-        targetX: lean === 0 ? targetX : lean < 0 ? Math.min(targetX, -0.3) : Math.max(targetX, 0.3),
+        targetX,
       };
     }
     case "left":
       return {
-        x: -OFFSCREEN_X - rng.next() * 1.8,
-        y: 3.2 + rng.next() * 9.5,
-        z: (rng.next() - 0.5) * 0.8,
+        x: -edgeX - rng.next() * 0.4,
+        // Keep Y inside the vertical frame so the rock is only off horizontally.
+        y: botY + rng.next() * Math.max(1.5, topY - FRUSTUM_MARGIN - botY - 0.8),
+        z: (rng.next() - 0.5) * 0.45,
         targetX: Math.min(targetX, 0.9),
       };
     case "right":
       return {
-        x: OFFSCREEN_X + rng.next() * 1.8,
-        y: 3.2 + rng.next() * 9.5,
-        z: (rng.next() - 0.5) * 0.8,
+        x: edgeX + rng.next() * 0.4,
+        y: botY + rng.next() * Math.max(1.5, topY - FRUSTUM_MARGIN - botY - 0.8),
+        z: (rng.next() - 0.5) * 0.45,
         targetX: Math.max(targetX, -0.9),
       };
     case "cornerL":
       return {
-        x: -OFFSCREEN_X - 0.6 - rng.next() * 1.4,
-        y: OFFSCREEN_Y + rng.next() * 1.8,
-        z: -0.25 - rng.next() * 0.55,
+        x: -edgeX - rng.next() * 0.35,
+        y: topY + rng.next() * 0.4,
+        z: -0.1 - rng.next() * 0.2,
         targetX: Math.min(targetX, 0.2),
       };
     case "cornerR":
       return {
-        x: OFFSCREEN_X + 0.6 + rng.next() * 1.4,
-        y: OFFSCREEN_Y + rng.next() * 1.8,
-        z: -0.25 - rng.next() * 0.55,
+        x: edgeX + rng.next() * 0.35,
+        y: topY + rng.next() * 0.4,
+        z: -0.1 - rng.next() * 0.2,
         targetX: Math.max(targetX, -0.2),
       };
   }

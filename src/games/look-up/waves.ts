@@ -74,8 +74,8 @@ export function waveConfig(wave: number, difficulty: Difficulty): WaveConfig {
   const minValue = Math.min(4 + Math.floor((w - 1) * 1.5 * scale.size), 40);
   const maxValue = Math.min(10 + Math.floor(w * 4 * scale.size), 120);
   const count = Math.min(3 + Math.floor((w - 1) * 0.6), 8);
-  // Slow early waves, but fast enough that motion is obvious within a few seconds.
-  const speed = (0.22 + (w - 1) * 0.035) * scale.speed;
+  // Slow early waves, but fast enough that horizon-edge spawns enter within ~1–2s.
+  const speed = (0.38 + (w - 1) * 0.04) * scale.speed;
   const bonusChance = w >= 2 ? Math.min(0.15 + w * 0.03, 0.45) : 0;
   return {
     wave: w,
