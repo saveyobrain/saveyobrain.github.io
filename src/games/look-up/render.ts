@@ -65,10 +65,10 @@ export const PLAYFIELD_HALF = 5.2;
 export const STATION_DECK_Y = 0.4;
 /** Asteroids hit the station when they reach this height. */
 export const IMPACT_Y = 1.7;
-/** Bottom of the visible spawn band. */
-export const SPAWN_Y = 8.6;
-/** Top of the visible spawn band — tall so rocks don't share one row. */
-export const SPAWN_Y_MAX = 13.5;
+/** Just above the camera frustum top (rocks enter from over the horizon). */
+export const OFFSCREEN_Y = 15.2;
+/** Past the left/right edges of the framed play column. */
+export const OFFSCREEN_X = 8.6;
 
 const CANNON_X = [-2.6, 2.6] as const;
 const BARREL_LEN = 1.05;
@@ -556,65 +556,68 @@ export interface ApproachSpawn {
   targetX: number;
 }
 
-type ApproachKind = "top" | "topLeft" | "topRight" | "left" | "right" | "cornerL" | "cornerR";
+type ApproachKind = "overTop" | "left" | "right" | "cornerL" | "cornerR";
 
 /**
- * Pick a spawn on the rim (top / sides / corners) so approaches aren't stacked
- * above center. Always aims toward a point on the station deck.
+ * Always spawn past the framed viewport (over the horizon / off the sides),
+ * then drift into view toward a deck aim point. Never mid-viewport empty space.
  */
 export function pickApproachSpawn(rng: { next(): number; pick<T>(items: readonly T[]): T }): ApproachSpawn {
-  const kind = rng.pick<ApproachKind>(["top", "topLeft", "topRight", "left", "right", "cornerL", "cornerR"]);
+  // Bias sides/corners so entries feel lateral, not only dropping from dead center.
+  const kind = rng.pick<ApproachKind>([
+    "overTop",
+    "overTop",
+    "left",
+    "right",
+    "cornerL",
+    "cornerR",
+    "left",
+    "right",
+  ]);
   const targetX = (rng.next() * 2 - 1) * (PLAYFIELD_HALF * 0.55);
-  const z = (rng.next() - 0.5) * 0.5;
+  const z = (rng.next() - 0.5) * 0.55;
   switch (kind) {
-    case "top":
+    case "overTop": {
+      // Above the top of the frame; X can lean left/right but still off-screen in Y.
+      const lean = rng.pick([-1, 0, 1] as const);
+      const x =
+        lean === 0
+          ? (rng.next() * 2 - 1) * (PLAYFIELD_HALF * 0.9)
+          : lean * (OFFSCREEN_X * 0.55 + rng.next() * 1.8);
       return {
-        x: (rng.next() * 2 - 1) * (PLAYFIELD_HALF - 0.6),
-        y: SPAWN_Y + rng.next() * (SPAWN_Y_MAX - SPAWN_Y),
+        x,
+        y: OFFSCREEN_Y + rng.next() * 2.4,
         z,
-        targetX,
+        targetX: lean === 0 ? targetX : lean < 0 ? Math.min(targetX, -0.3) : Math.max(targetX, 0.3),
       };
-    case "topLeft":
-      return {
-        x: -PLAYFIELD_HALF + 0.3 + rng.next() * 1.4,
-        y: SPAWN_Y_MAX - rng.next() * 1.2,
-        z,
-        targetX: Math.min(targetX, -0.4),
-      };
-    case "topRight":
-      return {
-        x: PLAYFIELD_HALF - 0.3 - rng.next() * 1.4,
-        y: SPAWN_Y_MAX - rng.next() * 1.2,
-        z,
-        targetX: Math.max(targetX, 0.4),
-      };
+    }
     case "left":
       return {
-        x: -PLAYFIELD_HALF - 0.2 - rng.next() * 0.8,
-        y: 4.5 + rng.next() * 7.5,
-        z: (rng.next() - 0.5) * 0.7,
-        targetX: Math.min(targetX, 0.8),
+        x: -OFFSCREEN_X - rng.next() * 1.8,
+        y: 3.2 + rng.next() * 9.5,
+        z: (rng.next() - 0.5) * 0.8,
+        targetX: Math.min(targetX, 0.9),
       };
     case "right":
       return {
-        x: PLAYFIELD_HALF + 0.2 + rng.next() * 0.8,
-        y: 4.5 + rng.next() * 7.5,
-        z: (rng.next() - 0.5) * 0.7,
-        targetX: Math.max(targetX, -0.8),
+        x: OFFSCREEN_X + rng.next() * 1.8,
+        y: 3.2 + rng.next() * 9.5,
+        z: (rng.next() - 0.5) * 0.8,
+        targetX: Math.max(targetX, -0.9),
       };
     case "cornerL":
       return {
-        x: -PLAYFIELD_HALF - 0.4 - rng.next() * 0.6,
-        y: SPAWN_Y + rng.next() * 2.2,
-        z: -0.2 - rng.next() * 0.5,
-        targetX: Math.min(targetX, 0),
+        x: -OFFSCREEN_X - 0.6 - rng.next() * 1.4,
+        y: OFFSCREEN_Y + rng.next() * 1.8,
+        z: -0.25 - rng.next() * 0.55,
+        targetX: Math.min(targetX, 0.2),
       };
     case "cornerR":
       return {
-        x: PLAYFIELD_HALF + 0.4 + rng.next() * 0.6,
-        y: SPAWN_Y + rng.next() * 2.2,
-        z: -0.2 - rng.next() * 0.5,
-        targetX: Math.max(targetX, 0),
+        x: OFFSCREEN_X + 0.6 + rng.next() * 1.4,
+        y: OFFSCREEN_Y + rng.next() * 1.8,
+        z: -0.25 - rng.next() * 0.55,
+        targetX: Math.max(targetX, -0.2),
       };
   }
 }
