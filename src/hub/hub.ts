@@ -1,3 +1,4 @@
+import { gameCopy } from "../core/gameCopy";
 import { GAMES } from "../core/registry";
 import { loadProgress } from "../core/storage";
 import { h } from "../core/ui/dom";
@@ -13,8 +14,7 @@ export function renderGameGrid(root: HTMLElement): void {
     const progress = loadProgress(game.id);
     const level = progress.levels[progress.difficulty];
     const playHref = `${base}${localizePath(`games/${game.id}/`, locale)}`;
-    const title = strings.stl.title;
-    const description = strings.stl.description;
+    const { title, description } = gameCopy(strings, game.id);
     return h(
       "article",
       { class: "game-card", style: `--accent: ${game.color}` },

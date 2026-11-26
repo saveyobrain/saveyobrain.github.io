@@ -1232,3 +1232,85 @@ button {
     opacity: 0;
   }
 }
+
+/* ---------- Look UP ---------- */
+
+.game-root.look-up {
+  background: #061018;
+}
+
+.game-root.look-up .hud-level,
+.game-root.look-up .hud-solves {
+  background: rgba(8, 22, 40, 0.78);
+  color: #e8f3ff;
+  box-shadow: 0 2px 12px rgba(0, 20, 40, 0.35);
+  border: 1px solid rgba(120, 180, 255, 0.22);
+}
+
+.game-root.look-up .lup-lives.critical {
+  color: #ffb4b4;
+  border-color: rgba(255, 120, 120, 0.45);
+}
+
+.game-root.look-up .lup-shields.empty {
+  opacity: 0.55;
+}
+
+.game-root.look-up .hud-menu {
+  background: rgba(8, 22, 40, 0.85);
+  color: #e8f3ff;
+  border-color: rgba(120, 180, 255, 0.28);
+}
+
+.game-root.look-up .task-panel {
+  background: linear-gradient(180deg, #0b1a2c, #081420);
+  box-shadow: 0 -6px 24px rgba(0, 10, 30, 0.45);
+  color: #e8f3ff;
+}
+
+.game-root.look-up .task-question {
+  color: #f2f7ff;
+}
+
+.game-root.look-up .task-option {
+  background: #10243a;
+  border-color: #2a4d6e;
+  color: #f2f7ff;
+}
+
+.game-root.look-up .task-option:hover:not(:disabled) {
+  background: #173552;
+  border-color: #5ec8ff;
+}
+
+.game-root.look-up .task-key {
+  color: #8eb0cc;
+}
+
+.game-root.look-up .task-option.correct {
+  background: #163d2e;
+  border-color: #3dd68c;
+}
+
+.game-root.look-up .task-option.wrong {
+  background: #3a1820;
+  border-color: #ff6b7a;
+}
+
+.game-root.look-up .task-panel.lup-idle {
+  opacity: 0.72;
+}
+
+.game-root.look-up .modal {
+  background: rgba(2, 8, 18, 0.55);
+}
+
+.game-root.look-up .modal-card {
+  background: #0d1c2e;
+  color: #e8f3ff;
+  border: 1px solid rgba(120, 180, 255, 0.2);
+}
+
+.game-root.look-up .modal-card p {
+  color: #b7c9dc;
+}

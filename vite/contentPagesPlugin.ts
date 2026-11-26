@@ -3,6 +3,7 @@ import path from "node:path";
 import matter from "gray-matter";
 import { marked } from "marked";
 import type { Plugin } from "vite";
+import { GAME_IDS } from "../src/core/gameIds.ts";
 import { enabledLocales, localizePath, type LocaleCode, absoluteLocaleUrl } from "../src/i18n/locales.ts";
 import { getStrings } from "../src/i18n/strings/index.ts";
 import { renderDocument, renderGameDocument, renderHomeDocument, SITE_ORIGIN } from "./siteChrome.ts";
@@ -66,12 +67,14 @@ function writePages(root: string, base: string): string[] {
     fs.writeFileSync(homePath, renderHomeDocument(base, locale), "utf8");
     written.push(homePath);
 
-    // Game shell
-    const gameRel = path.join(localizePath("games/save-the-light/", locale), "index.html");
-    const gamePath = path.join(root, gameRel);
-    fs.mkdirSync(path.dirname(gamePath), { recursive: true });
-    fs.writeFileSync(gamePath, renderGameDocument(base, locale), "utf8");
-    written.push(gamePath);
+    // Game shells
+    for (const gameId of GAME_IDS) {
+      const gameRel = path.join(localizePath(`games/${gameId}/`, locale), "index.html");
+      const gamePath = path.join(root, gameRel);
+      fs.mkdirSync(path.dirname(gamePath), { recursive: true });
+      fs.writeFileSync(gamePath, renderGameDocument(base, locale, gameId), "utf8");
+      written.push(gamePath);
+    }
 
     for (const page of CONTENT_PAGES) {
       const s = getStrings(locale);
@@ -193,10 +196,12 @@ export function contentPageInputs(root: string): Record<string, string> {
 
   for (const { code: locale } of enabledLocales()) {
     const prefix = localizePath("", locale);
-    // EN home + game are listed explicitly in vite.config.ts
+    // EN home + game shells are listed explicitly in vite.config.ts
     if (locale !== "en") {
       inputs[`home-${locale}`] = path.join(root, prefix, "index.html");
-      inputs[`game-${locale}`] = path.join(root, localizePath("games/save-the-light/", locale), "index.html");
+      for (const gameId of GAME_IDS) {
+        inputs[`game-${gameId}-${locale}`] = path.join(root, localizePath(`games/${gameId}/`, locale), "index.html");
+      }
     }
     for (const page of CONTENT_PAGES) {
       const rel = outPathFor(locale, page.logicalPath);

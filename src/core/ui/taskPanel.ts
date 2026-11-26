@@ -18,7 +18,11 @@ export function createTaskPanel(onPick: (index: number) => void): TaskPanel {
   return {
     el,
     show(task) {
-      question.textContent = task.text.includes("=") ? `${task.text},  x = ?` : `${task.text} = ?`;
+      question.textContent = task.text.includes("?")
+        ? task.text
+        : task.text.includes("=")
+          ? `${task.text},  x = ?`
+          : `${task.text} = ?`;
       options.replaceChildren();
       options.dataset.count = String(task.options.length);
       buttons = task.options.map((value, i) => {

@@ -1,5 +1,7 @@
 /** Shared header/footer HTML for static pages (used by the Vite content plugin). */
 
+import { gameCopy } from "../src/core/gameCopy.ts";
+import { GAME_IDS } from "../src/core/gameIds.ts";
 import {
   absoluteLocaleUrl,
   defaultLocale,
@@ -199,13 +201,15 @@ export function renderDocument(
 /** Home page document for a locale (hub shell). */
 export function renderHomeDocument(base: string, locale: LocaleCode): string {
   const s = getStrings(locale);
-  const gamePath = localeHref(base, locale, "games/save-the-light/");
+  const featured = GAME_IDS[0];
+  const featuredCopy = gameCopy(s, featured);
+  const gamePath = localeHref(base, locale, `games/${featured}/`);
   const mainHtml = `
         <section class="hub-hero">
           <h1 class="hub-headline">${escapeHtml(s.hubHeadline)}</h1>
           <p class="hub-intro">${escapeHtml(s.hubIntro)}</p>
           <p class="hub-hero-cta">
-            <a class="btn btn-primary" href="${gamePath}">${escapeHtml(s.playGame(s.stl.title))}</a>
+            <a class="btn btn-primary" href="${gamePath}">${escapeHtml(s.playGame(featuredCopy.title))}</a>
           </p>
         </section>
 
@@ -227,12 +231,15 @@ export function renderHomeDocument(base: string, locale: LocaleCode): string {
 }
 
 /** Minimal game shell for a locale. */
-export function renderGameDocument(base: string, locale: LocaleCode): string {
+export function renderGameDocument(base: string, locale: LocaleCode, gameId: string): string {
   const s = getStrings(locale);
-  const title = s.stl.pageTitle;
-  const description = s.stl.description;
-  const canonical = absoluteLocaleUrl(SITE_ORIGIN, "games/save-the-light/", locale);
-  const hreflang = renderHreflangLinks("games/save-the-light/");
+  const copy = gameCopy(s, gameId);
+  const logicalPath = `games/${gameId}/`;
+  const title = copy.pageTitle;
+  const description = copy.description;
+  const canonical = absoluteLocaleUrl(SITE_ORIGIN, logicalPath, locale);
+  const hreflang = renderHreflangLinks(logicalPath);
+  const theme = gameId === "look-up" ? "#061018" : "#fff4dc";
 
   return `<!doctype html>
 <html lang="${escapeAttr(LOCALES[locale].htmlLang)}">
@@ -243,7 +250,7 @@ export function renderGameDocument(base: string, locale: LocaleCode): string {
     <link rel="canonical" href="${escapeAttr(canonical)}" />
     ${hreflang}
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#fff4dc" />
+    <meta name="theme-color" content="${theme}" />
     <meta property="og:title" content="${escapeAttr(title)}" />
     <meta property="og:description" content="${escapeAttr(description)}" />
     <meta property="og:type" content="website" />
@@ -262,7 +269,6 @@ export function renderGameDocument(base: string, locale: LocaleCode): string {
 </html>
 `;
 }
-
 /** Production origin for canonical URLs (keep in sync with src/config.ts SITE_URL). */
 export const SITE_ORIGIN = "https://saveyobrain.com";
 

@@ -16,6 +16,7 @@ export default defineConfig({
       input: {
         main: path.join(root, "index.html"),
         game: path.join(root, "games/save-the-light/index.html"),
+        "look-up": path.join(root, "games/look-up/index.html"),
         ...contentPageInputs(root),
       },
     },

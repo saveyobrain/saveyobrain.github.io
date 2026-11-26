@@ -81,4 +81,25 @@ export interface Strings {
     coachMeterHint: string;
     difficultyHints: Record<Difficulty, string>;
   };
+
+  lookUp: {
+    title: string;
+    pageTitle: string;
+    description: string;
+    introGoal: string;
+    introRules: string;
+    controls: string;
+    wave: (n: number) => string;
+    score: (n: number) => string;
+    lives: (n: number, max: number) => string;
+    shields: (n: number) => string;
+    taskPrompt: (n: number) => string;
+    pickTarget: string;
+    waveClear: string;
+    waveClearHint: string;
+    nextWave: string;
+    stationHit: string;
+    stationHitHint: string;
+    difficultyHints: Record<Exclude<Difficulty, "custom">, string>;
+  };
 }

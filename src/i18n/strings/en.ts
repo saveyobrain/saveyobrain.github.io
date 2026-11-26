@@ -96,4 +96,31 @@ export const en: Strings = {
       custom: "Practice chosen times tables. Easy maze, numbers grow with the level.",
     } satisfies Record<Difficulty, string>,
   },
+
+  lookUp: {
+    title: "Look UP",
+    pageTitle: "Look UP free divisor math game - Save Yo Brain",
+    description: "Save the station from numbered asteroids. Pick a proper divisor to split them before impact!",
+    introGoal: "Asteroids labeled with numbers are closing in. Split them before they hit the station.",
+    introRules:
+      "Pick a proper divisor D of N (not 1, not N). A hit splits the rock into D pieces labeled N\u00f7D. Odd primes burn safely. Wrong picks ricochet.",
+    controls: "Target: tap a rock or use arrow keys. Answer: keys 1-4 or tap. Menu: Esc.",
+    wave: (n) => `Wave ${n}`,
+    score: (n) => `Score ${n}`,
+    lives: (n, max) => `\u2764 ${n}/${max}`,
+    shields: (n) => `\u{1F6E1} ${n}`,
+    taskPrompt: (n) => `${n} \u00f7 ?`,
+    pickTarget: "Select an asteroid",
+    waveClear: "Wave cleared!",
+    waveClearHint: "Next wave brings bigger, faster rocks.",
+    nextWave: "Next wave",
+    stationHit: "Station breached...",
+    stationHitHint: "Shields absorb one hit. Split rocks before they reach you.",
+    difficultyHints: {
+      easy: "Slower rocks, five lives. Great for learning divisors.",
+      normal: "Steady approach, three lives. Watch for shield bonuses.",
+      hard: "Faster, larger numbers. Misses hurt more often.",
+      hardcore: "Few lives, relentless waves. Stay sharp.",
+    },
+  },
 };
