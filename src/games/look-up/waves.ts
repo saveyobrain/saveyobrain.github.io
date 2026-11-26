@@ -8,17 +8,17 @@ export interface WaveConfig {
   count: number;
   minValue: number;
   maxValue: number;
-  /** Units per second toward the station. */
+  /** Units per second falling toward the station (world Y). */
   speed: number;
   /** Chance (0..1) to include a shield bonus target in the wave. */
   bonusChance: number;
 }
 
 const DIFF_SCALE: Record<Exclude<Difficulty, "custom">, { speed: number; size: number; lives: number }> = {
-  easy: { speed: 0.75, size: 0.85, lives: 5 },
+  easy: { speed: 0.7, size: 0.85, lives: 5 },
   normal: { speed: 1, size: 1, lives: 3 },
-  hard: { speed: 1.25, size: 1.15, lives: 3 },
-  hardcore: { speed: 1.55, size: 1.3, lives: 2 },
+  hard: { speed: 1.2, size: 1.15, lives: 3 },
+  hardcore: { speed: 1.4, size: 1.3, lives: 2 },
 };
 
 export function startingLives(difficulty: Difficulty): number {
@@ -31,8 +31,10 @@ export function waveConfig(wave: number, difficulty: Difficulty): WaveConfig {
   const scale = difficulty === "custom" ? DIFF_SCALE.normal : DIFF_SCALE[difficulty];
   const minValue = Math.min(4 + Math.floor((w - 1) * 1.5 * scale.size), 40);
   const maxValue = Math.min(10 + Math.floor(w * 4 * scale.size), 120);
-  const count = Math.min(3 + Math.floor((w - 1) * 0.75), 10);
-  const speed = (0.55 + (w - 1) * 0.08) * scale.speed;
+  const count = Math.min(3 + Math.floor((w - 1) * 0.6), 8);
+  // Much slower early on: ~0.16 u/s on wave 1 normal (~90s from spawn to impact),
+  // then a gentle ramp so later waves still feel learnable.
+  const speed = (0.16 + (w - 1) * 0.028) * scale.speed;
   const bonusChance = w >= 2 ? Math.min(0.15 + w * 0.03, 0.45) : 0;
   return { wave: w, count, minValue, maxValue, speed, bonusChance };
 }

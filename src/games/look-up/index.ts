@@ -23,16 +23,22 @@ import {
   splitDivisors,
   splitScore,
 } from "./math";
-import { SpaceView, spawnPoint, stationHitDistance, type BodyVisual, type ShotVisual } from "./render";
+import {
+  IMPACT_Y,
+  PLAYFIELD_HALF,
+  SPAWN_Y,
+  SpaceView,
+  spawnAbove,
+  type BodyVisual,
+  type ShotVisual,
+} from "./render";
 import { shouldSpawnBonus, spawnValues, startingLives, waveConfig } from "./waves";
 
 const GAME_ID = "look-up";
 const CHOICE_COUNT = 4;
 const FEEDBACK_OK = 0.35;
 const FEEDBACK_BAD = 0.85;
-const SHOT_LIFE = 0.35;
 const BURN_LIFE = 0.55;
-const SPAWN_DISTANCE = 11.5;
 
 type State = "intro" | "playing" | "paused" | "won" | "lost" | "waveClear";
 
@@ -140,7 +146,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       selectedId = null;
       return;
     }
-    threats.sort((a, b) => a.x * a.x + a.y * a.y + a.z * a.z - (b.x * b.x + b.y * b.y + b.z * b.z));
+    // Prefer the rock closest to impact (lowest Y toward the station deck).
+    threats.sort((a, b) => a.y - b.y || Math.abs(a.x) - Math.abs(b.x));
     selectedId = threats[0].id;
   }
 
@@ -177,9 +184,11 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     selectedId = null;
     const values = spawnValues(cfg, rng);
     values.forEach((label, i) => {
-      const angle = (Math.PI * 2 * i) / values.length + rng.next() * 0.4;
-      const elev = (rng.next() - 0.5) * 2.2;
-      const p = spawnPoint(angle, SPAWN_DISTANCE + rng.next() * 1.5, elev);
+      // Spread across lanes and stagger height so rocks fall like Tetris rows, not a ring.
+      const lane = ((i + 0.5) / values.length) * 2 - 1;
+      const x = lane * (PLAYFIELD_HALF - 0.8) + (rng.next() - 0.5) * 0.9;
+      const height = SPAWN_Y + i * 1.35 + rng.next() * 1.1;
+      const p = spawnAbove(x, height, (rng.next() - 0.5) * 0.4);
       bodies.push({
         id: String(nextId++),
         kind: "asteroid",
@@ -187,15 +196,15 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         x: p.x,
         y: p.y,
         z: p.z,
-        speed: cfg.speed * (0.85 + rng.next() * 0.3),
+        speed: cfg.speed * (0.9 + rng.next() * 0.2),
         burning: false,
         burnTimer: 0,
         hitFlash: 0,
       });
     });
     if (shouldSpawnBonus(cfg, rng)) {
-      const angle = rng.next() * Math.PI * 2;
-      const p = spawnPoint(angle, SPAWN_DISTANCE + 1, (rng.next() - 0.5) * 1.5);
+      const x = (rng.next() * 2 - 1) * (PLAYFIELD_HALF - 1);
+      const p = spawnAbove(x, SPAWN_Y + values.length * 0.8 + 1.5, 0);
       bodies.push({
         id: String(nextId++),
         kind: "bonus",
@@ -203,7 +212,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         x: p.x,
         y: p.y,
         z: p.z,
-        speed: cfg.speed * 0.7,
+        speed: cfg.speed * 0.75,
         burning: false,
         burnTimer: 0,
         hitFlash: 0,
@@ -306,12 +315,14 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function fireShot(to: Body, success: boolean): void {
+    const from = view.cannonMuzzle(to.x);
+    const flight = Math.max(0.28, Math.min(0.55, (to.y - from.y) * 0.04));
     shots.push({
       id: String(nextId++),
-      from: new Vector3(0, 0.2, 0),
+      from,
       to: new Vector3(to.x, to.y, to.z),
-      life: SHOT_LIFE,
-      maxLife: SHOT_LIFE,
+      life: flight,
+      maxLife: flight,
       success,
     });
   }
@@ -329,15 +340,13 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     if (correct && result.ok) {
       fireShot(body, true);
       score += splitScore(body.label, pick);
-      // Replace the hit body with children (or burn markers).
+      // Replace the hit body with children spreading sideways while still falling.
       body.burning = true;
       body.burnTimer = BURN_LIFE * 0.35;
       const children = result.children;
-      const baseAngle = Math.atan2(body.z, body.x);
       children.forEach((label, i) => {
-        const spread = (i - (children.length - 1) / 2) * 0.35;
-        const dist = Math.hypot(body.x, body.y, body.z) * 0.92;
-        const p = spawnPoint(baseAngle + spread, Math.max(stationHitDistance() + 1.2, dist), body.y * 0.8);
+        const spread = (i - (children.length - 1) / 2) * 1.05;
+        const p = spawnAbove(body.x + spread, Math.max(IMPACT_Y + 1.4, body.y - 0.35), body.z);
         const child: Body = {
           id: String(nextId++),
           kind: "asteroid",
@@ -345,7 +354,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
           x: p.x,
           y: p.y,
           z: p.z,
-          speed: body.speed * 1.05,
+          speed: body.speed * 1.02,
           burning: burnsHarmlessly(label),
           burnTimer: burnsHarmlessly(label) ? BURN_LIFE : 0,
           hitFlash: 0.6,
@@ -441,9 +450,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     const body = bodies.find((b) => b.id === id && !b.burning);
     if (!body) return;
     if (body.kind === "bonus") {
-      // Tap bonus to scoop early if close enough; otherwise just select wait.
-      const dist = Math.hypot(body.x, body.y, body.z);
-      if (dist < 6) {
+      // Tap bonus to scoop once it has fallen near the station.
+      if (body.y < IMPACT_Y + 5) {
         collectBonus(body);
         pickDefaultTarget();
         showTaskForSelection();
@@ -468,8 +476,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         break;
       case "move": {
         if (state !== "playing") break;
-        // Cycle target with left/right.
-        const threats = activeThreats();
+        // Cycle among threats sorted by closeness to the station (lowest Y first).
+        const threats = activeThreats().sort((a, b) => a.y - b.y || a.x - b.x);
         if (threats.length === 0) break;
         const idx = Math.max(0, threats.findIndex((b) => b.id === selectedId));
         const next =
@@ -484,28 +492,30 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   });
 
   function updateBodies(dt: number): void {
-    const hitR = stationHitDistance();
     for (const body of bodies) {
       if (body.hitFlash > 0) body.hitFlash = Math.max(0, body.hitFlash - dt * 2.5);
       if (body.burning) {
         body.burnTimer -= dt;
         continue;
       }
-      const dist = Math.hypot(body.x, body.y, body.z);
-      if (dist <= hitR) {
+      if (body.y <= IMPACT_Y) {
         impact(body);
         continue;
       }
-      const step = Math.min(body.speed * dt, dist - hitR + 0.01);
-      const nx = body.x / dist;
-      const ny = body.y / dist;
-      const nz = body.z / dist;
-      body.x -= nx * step;
-      body.y -= ny * step;
-      body.z -= nz * step;
+      body.y -= Math.min(body.speed * dt, body.y - IMPACT_Y + 0.01);
     }
     bodies = bodies.filter((b) => !(b.burning && b.burnTimer <= 0));
-    if (selectedId && !bodies.some((b) => b.id === selectedId && !b.burning)) {
+    // Keep auto-target locked to the closest threat as rocks fall.
+    const closest = activeThreats().sort((a, b) => a.y - b.y || Math.abs(a.x) - Math.abs(b.x))[0];
+    if (closest && selectedId !== closest.id && feedbackTimer <= 0) {
+      // Only auto-retarget if the player hasn't manually picked something still alive,
+      // or the previous selection is gone / farther from impact than the new closest.
+      const current = selectedBody();
+      if (!current || current.y > closest.y + 0.05) {
+        selectedId = closest.id;
+        showTaskForSelection();
+      }
+    } else if (selectedId && !bodies.some((b) => b.id === selectedId && !b.burning)) {
       pickDefaultTarget();
       if (feedbackTimer <= 0) showTaskForSelection();
     }
