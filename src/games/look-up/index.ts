@@ -27,6 +27,7 @@ import {
   IMPACT_Y,
   PLAYFIELD_HALF,
   SPAWN_Y,
+  SPAWN_Y_MAX,
   SpaceView,
   spawnAbove,
   type BodyVisual,
@@ -184,11 +185,12 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     selectedId = null;
     const values = spawnValues(cfg, rng);
     values.forEach((label, i) => {
-      // Spread across lanes and stagger height so rocks fall like Tetris rows, not a ring.
+      // Spread across lanes; keep every rock inside the camera frame at spawn.
       const lane = ((i + 0.5) / values.length) * 2 - 1;
-      const x = lane * (PLAYFIELD_HALF - 0.8) + (rng.next() - 0.5) * 0.9;
-      const height = SPAWN_Y + i * 1.35 + rng.next() * 1.1;
-      const p = spawnAbove(x, height, (rng.next() - 0.5) * 0.4);
+      const x = lane * (PLAYFIELD_HALF - 0.9) + (rng.next() - 0.5) * 0.6;
+      const t = values.length <= 1 ? 0 : i / (values.length - 1);
+      const height = SPAWN_Y + t * (SPAWN_Y_MAX - SPAWN_Y) + (rng.next() - 0.5) * 0.35;
+      const p = spawnAbove(x, height, (rng.next() - 0.5) * 0.25);
       bodies.push({
         id: String(nextId++),
         kind: "asteroid",
@@ -196,15 +198,15 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         x: p.x,
         y: p.y,
         z: p.z,
-        speed: cfg.speed * (0.9 + rng.next() * 0.2),
+        speed: cfg.speed * (0.92 + rng.next() * 0.16),
         burning: false,
         burnTimer: 0,
         hitFlash: 0,
       });
     });
     if (shouldSpawnBonus(cfg, rng)) {
-      const x = (rng.next() * 2 - 1) * (PLAYFIELD_HALF - 1);
-      const p = spawnAbove(x, SPAWN_Y + values.length * 0.8 + 1.5, 0);
+      const x = (rng.next() * 2 - 1) * (PLAYFIELD_HALF - 1.2);
+      const p = spawnAbove(x, SPAWN_Y_MAX - 0.4, 0);
       bodies.push({
         id: String(nextId++),
         kind: "bonus",
@@ -212,7 +214,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         x: p.x,
         y: p.y,
         z: p.z,
-        speed: cfg.speed * 0.75,
+        speed: cfg.speed * 0.8,
         burning: false,
         burnTimer: 0,
         hitFlash: 0,

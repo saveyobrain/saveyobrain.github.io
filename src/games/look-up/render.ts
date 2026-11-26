@@ -6,10 +6,12 @@ import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import { CreateCylinder } from "@babylonjs/core/Meshes/Builders/cylinderBuilder";
+import { CreateDisc } from "@babylonjs/core/Meshes/Builders/discBuilder";
 import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder";
 
 export type BodyKind = "asteroid" | "bonus";
@@ -46,137 +48,168 @@ interface BodyMesh {
 }
 
 /** Half-width of the play lane (world X). */
-export const PLAYFIELD_HALF = 5.5;
-/** Y of the station deck top (impact line sits just above). */
-export const STATION_DECK_Y = 0.35;
+export const PLAYFIELD_HALF = 5.2;
+/** Y of the station deck top. */
+export const STATION_DECK_Y = 0.4;
 /** Asteroids hit the station when they reach this height. */
-export const IMPACT_Y = 1.55;
-/** Typical spawn height above the station. */
-export const SPAWN_Y = 15.5;
+export const IMPACT_Y = 1.7;
+/**
+ * Lowest spawn band — kept inside the camera frame so rocks are visible
+ * immediately after Start (not waiting off-screen above the frustum).
+ */
+export const SPAWN_Y = 11.2;
+/** Top of the visible play column (for staggered rows). */
+export const SPAWN_Y_MAX = 13.4;
 
-const CANNON_X = [-2.35, 2.35] as const;
+const CANNON_X = [-2.6, 2.6] as const;
 
-/** Front-facing space view: station at the bottom, asteroids fall from above. */
+function litMat(scene: Scene, name: string, diffuse: Color3, emissive: Color3): StandardMaterial {
+  const m = new StandardMaterial(name, scene);
+  m.diffuseColor = diffuse;
+  m.emissiveColor = emissive;
+  m.specularColor = new Color3(0.35, 0.4, 0.5);
+  return m;
+}
+
+function glowMat(scene: Scene, name: string, color: Color3): StandardMaterial {
+  const m = new StandardMaterial(name, scene);
+  m.emissiveColor = color;
+  m.disableLighting = true;
+  return m;
+}
+
+/** Front-facing space view: station deck at bottom, asteroids fall from the top of the frame. */
 export class SpaceView {
   readonly camera: TargetCamera;
   private readonly bodies = new Map<string, BodyMesh>();
   private readonly shots = new Map<string, Mesh>();
-  private readonly starField: Mesh;
   private readonly cannons: Mesh[] = [];
   private stationShield: Mesh | null = null;
   private time = 0;
   private pulse = 0;
 
   constructor(private readonly scene: Scene) {
-    scene.clearColor = new Color4(0.02, 0.04, 0.1, 1);
+    scene.clearColor = new Color4(0.015, 0.03, 0.07, 1);
 
-    // Look straight at the vertical playfield (station bottom, sky top).
-    this.camera = new TargetCamera("cam", new Vector3(0, 7.2, -18.5), scene);
+    // Frame: station near bottom edge, spawn band near top — rocks visible at once.
+    this.camera = new TargetCamera("cam", new Vector3(0, 6.4, -17.5), scene);
     this.camera.setTarget(new Vector3(0, 6.4, 0));
-    this.camera.fov = 0.55;
+    this.camera.fov = 0.78; // ~45° — full column from deck (~0) to spawn (~13)
     this.camera.minZ = 0.2;
     this.camera.maxZ = 80;
 
-    const hemi = new HemisphericLight("hemi", new Vector3(0.15, 1, -0.35), scene);
-    hemi.intensity = 0.6;
-    hemi.groundColor = new Color3(0.08, 0.12, 0.2);
+    const hemi = new HemisphericLight("hemi", new Vector3(0.1, 1, -0.4), scene);
+    hemi.intensity = 0.7;
+    hemi.groundColor = new Color3(0.1, 0.14, 0.22);
 
-    const sun = new PointLight("sun", new Vector3(-4, 14, -8), scene);
-    sun.intensity = 0.9;
-    sun.diffuse = new Color3(0.75, 0.88, 1);
+    const sun = new PointLight("sun", new Vector3(3, 12, -10), scene);
+    sun.intensity = 0.95;
+    sun.diffuse = new Color3(0.85, 0.92, 1);
 
     this.buildStation();
-    this.starField = this.buildStars();
+    this.buildStars(); // stays in the scene; no further animation needed
   }
 
   private buildStation(): void {
-    // Partially visible station hull / deck along the bottom of the view.
-    const hull = CreateBox("stationHull", { width: 14, height: 2.4, depth: 3.2 }, this.scene);
-    hull.position = new Vector3(0, -0.55, 0.6);
-    const hullMat = new StandardMaterial("hullMat", this.scene);
-    hullMat.diffuseColor = new Color3(0.28, 0.38, 0.48);
-    hullMat.emissiveColor = new Color3(0.04, 0.08, 0.12);
-    hullMat.specularColor = new Color3(0.25, 0.35, 0.45);
-    hull.material = hullMat;
+    // Thick hull slab peeking from the bottom of the screen.
+    const hull = CreateBox("stationHull", { width: 13.5, height: 2.8, depth: 2.6 }, this.scene);
+    hull.position = new Vector3(0, -0.7, 0.4);
+    hull.material = litMat(this.scene, "hullMat", new Color3(0.22, 0.3, 0.4), new Color3(0.05, 0.09, 0.14));
 
-    const deck = CreateBox("stationDeck", { width: 11.5, height: 0.35, depth: 2.4 }, this.scene);
-    deck.position = new Vector3(0, STATION_DECK_Y, 0.2);
-    const deckMat = new StandardMaterial("deckMat", this.scene);
-    deckMat.diffuseColor = new Color3(0.45, 0.7, 0.85);
-    deckMat.emissiveColor = new Color3(0.08, 0.18, 0.25);
-    deck.material = deckMat;
+    // Flat deck surface — reads as a platform, not a globe.
+    const deck = CreateBox("stationDeck", { width: 12, height: 0.28, depth: 2.2 }, this.scene);
+    deck.position = new Vector3(0, STATION_DECK_Y, 0.1);
+    deck.material = litMat(this.scene, "deckMat", new Color3(0.4, 0.62, 0.78), new Color3(0.1, 0.22, 0.3));
 
-    // Soft lit strips so the surface reads as a station deck, not a planet.
-    for (const x of [-4.2, -1.4, 1.4, 4.2]) {
-      const strip = CreateBox(`deckStrip-${x}`, { width: 0.35, height: 0.08, depth: 2.1 }, this.scene);
-      strip.position = new Vector3(x, STATION_DECK_Y + 0.22, 0.15);
-      const stripMat = new StandardMaterial(`stripMat-${x}`, this.scene);
-      stripMat.emissiveColor = new Color3(0.95, 0.7, 0.25);
-      stripMat.disableLighting = true;
-      strip.material = stripMat;
+    // Panel seams / window row for “station surface” silhouette.
+    for (let i = -4; i <= 4; i++) {
+      const seam = CreateBox(`seam-${i}`, { width: 0.08, height: 0.06, depth: 2.0 }, this.scene);
+      seam.position = new Vector3(i * 1.25, STATION_DECK_Y + 0.18, 0.05);
+      seam.material = glowMat(this.scene, `seamMat-${i}`, new Color3(0.15, 0.35, 0.5));
+    }
+    for (const x of [-3.5, -1.75, 0, 1.75, 3.5]) {
+      const window = CreateBox(`win-${x}`, { width: 0.55, height: 0.28, depth: 0.12 }, this.scene);
+      window.position = new Vector3(x, -0.15, -0.85);
+      window.material = glowMat(this.scene, `winMat-${x}`, new Color3(0.95, 0.75, 0.35));
     }
 
-    const bridge = CreateBox("bridge", { width: 2.4, height: 1.1, depth: 1.4 }, this.scene);
-    bridge.position = new Vector3(0, STATION_DECK_Y + 0.85, 0.55);
-    const bridgeMat = new StandardMaterial("bridgeMat", this.scene);
-    bridgeMat.diffuseColor = new Color3(0.35, 0.55, 0.7);
-    bridgeMat.emissiveColor = new Color3(0.06, 0.14, 0.2);
-    bridge.material = bridgeMat;
+    // Central tower so the silhouette is clearly artificial.
+    const tower = CreateBox("tower", { width: 1.6, height: 1.6, depth: 1.2 }, this.scene);
+    tower.position = new Vector3(0, STATION_DECK_Y + 1.05, 0.35);
+    tower.material = litMat(this.scene, "towerMat", new Color3(0.32, 0.48, 0.6), new Color3(0.07, 0.15, 0.22));
+    const dish = CreateCylinder("dish", { height: 0.12, diameter: 1.1 }, this.scene);
+    dish.position = new Vector3(0, STATION_DECK_Y + 1.95, 0.35);
+    dish.material = litMat(this.scene, "dishMat", new Color3(0.7, 0.75, 0.85), new Color3(0.15, 0.2, 0.28));
 
     for (let i = 0; i < CANNON_X.length; i++) {
-      const x = CANNON_X[i];
-      const base = CreateCylinder(`cannonBase-${i}`, { height: 0.45, diameter: 0.85 }, this.scene);
-      base.position = new Vector3(x, STATION_DECK_Y + 0.4, -0.15);
-      const baseMat = new StandardMaterial(`cannonBaseMat-${i}`, this.scene);
-      baseMat.diffuseColor = new Color3(0.55, 0.6, 0.7);
-      baseMat.emissiveColor = new Color3(0.08, 0.1, 0.14);
-      base.material = baseMat;
-
-      const barrel = CreateCylinder(`cannonBarrel-${i}`, { height: 1.35, diameterTop: 0.28, diameterBottom: 0.42 }, this.scene);
-      barrel.rotation.x = Math.PI / 2;
-      barrel.position = new Vector3(x, STATION_DECK_Y + 0.85, -0.75);
-      const barrelMat = new StandardMaterial(`cannonBarrelMat-${i}`, this.scene);
-      barrelMat.diffuseColor = new Color3(0.7, 0.75, 0.85);
-      barrelMat.emissiveColor = new Color3(0.12, 0.16, 0.22);
-      barrel.material = barrelMat;
-      this.cannons.push(barrel);
+      this.buildCannon(i, CANNON_X[i]);
     }
 
-    const shield = CreateBox("shieldHint", { width: 12, height: 0.9, depth: 2.8 }, this.scene);
-    shield.position = new Vector3(0, IMPACT_Y + 0.15, 0.1);
+    const shield = CreateBox("shieldHint", { width: 12.2, height: 0.7, depth: 2.4 }, this.scene);
+    shield.position = new Vector3(0, IMPACT_Y + 0.1, 0.05);
     const shieldMat = new StandardMaterial("shieldMat", this.scene);
-    shieldMat.diffuseColor = new Color3(0.2, 0.9, 0.7);
-    shieldMat.emissiveColor = new Color3(0.05, 0.25, 0.2);
-    shieldMat.alpha = 0.14;
+    shieldMat.emissiveColor = new Color3(0.15, 0.85, 0.65);
+    shieldMat.alpha = 0.16;
     shieldMat.wireframe = true;
+    shieldMat.disableLighting = true;
     shield.material = shieldMat;
     this.stationShield = shield;
   }
 
+  /** Recognisable AA turret: pedestal + upright barrel + glowing muzzle ring. */
+  private buildCannon(i: number, x: number): void {
+    const pedestal = CreateCylinder(`cannonPedestal-${i}`, { height: 0.55, diameterTop: 0.7, diameterBottom: 0.95 }, this.scene);
+    pedestal.position = new Vector3(x, STATION_DECK_Y + 0.45, -0.35);
+    pedestal.material = litMat(
+      this.scene,
+      `pedestalMat-${i}`,
+      new Color3(0.45, 0.5, 0.58),
+      new Color3(0.1, 0.12, 0.16),
+    );
+
+    const yoke = CreateBox(`cannonYoke-${i}`, { width: 0.85, height: 0.35, depth: 0.55 }, this.scene);
+    yoke.position = new Vector3(x, STATION_DECK_Y + 0.85, -0.35);
+    yoke.material = litMat(this.scene, `yokeMat-${i}`, new Color3(0.55, 0.6, 0.68), new Color3(0.12, 0.14, 0.18));
+
+    // Barrel points UP toward falling asteroids (default cylinder = Y axis).
+    const barrel = CreateCylinder(`cannonBarrel-${i}`, { height: 1.7, diameterTop: 0.26, diameterBottom: 0.4 }, this.scene);
+    barrel.position = new Vector3(x, STATION_DECK_Y + 1.75, -0.35);
+    barrel.material = litMat(this.scene, `barrelMat-${i}`, new Color3(0.65, 0.7, 0.8), new Color3(0.18, 0.22, 0.3));
+    this.cannons.push(barrel);
+
+    const collar = CreateCylinder(`cannonCollar-${i}`, { height: 0.22, diameter: 0.52 }, this.scene);
+    collar.position = new Vector3(x, STATION_DECK_Y + 1.15, -0.35);
+    collar.material = litMat(this.scene, `collarMat-${i}`, new Color3(0.75, 0.55, 0.25), new Color3(0.3, 0.18, 0.05));
+
+    const muzzle = CreateDisc(`cannonMuzzle-${i}`, { radius: 0.22, tessellation: 24 }, this.scene);
+    muzzle.rotation.x = Math.PI / 2;
+    muzzle.position = new Vector3(x, STATION_DECK_Y + 2.6, -0.35);
+    muzzle.material = glowMat(this.scene, `muzzleMat-${i}`, new Color3(1, 0.55, 0.2));
+
+    const tip = CreateSphere(`cannonTip-${i}`, { diameter: 0.18, segments: 8 }, this.scene);
+    tip.position = new Vector3(x, STATION_DECK_Y + 2.55, -0.35);
+    tip.material = glowMat(this.scene, `tipMat-${i}`, new Color3(1, 0.85, 0.4));
+  }
+
   private buildStars(): Mesh {
-    const plane = CreatePlane("stars", { width: 40, height: 28 }, this.scene);
-    plane.position = new Vector3(0, 9, 8);
-    const tex = new DynamicTexture("starTex", { width: 512, height: 512 }, this.scene, false);
+    const plane = CreatePlane("stars", { width: 36, height: 26 }, this.scene);
+    plane.position = new Vector3(0, 7.5, 6);
+    // High-res + nearest sampling keeps points crisp (no soft bloom wash).
+    const tex = new DynamicTexture("starTex", { width: 1024, height: 1024 }, this.scene, false);
+    tex.updateSamplingMode(Texture.NEAREST_NEAREST);
+    tex.wrapU = Texture.CLAMP_ADDRESSMODE;
+    tex.wrapV = Texture.CLAMP_ADDRESSMODE;
     const ctx = tex.getContext() as unknown as CanvasRenderingContext2D;
-    ctx.fillStyle = "#02040c";
-    ctx.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 240; i++) {
-      const x = Math.random() * 512;
-      const y = Math.random() * 512;
-      const r = Math.random() * 1.5 + 0.25;
-      ctx.fillStyle = `rgba(${180 + Math.random() * 75}, ${200 + Math.random() * 55}, 255, ${0.3 + Math.random() * 0.7})`;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    for (let i = 0; i < 5; i++) {
-      const x = Math.random() * 512;
-      const y = Math.random() * 512;
-      const grd = ctx.createRadialGradient(x, y, 0, x, y, 70 + Math.random() * 50);
-      grd.addColorStop(0, `rgba(${30 + Math.random() * 70}, ${100 + Math.random() * 90}, ${170 + Math.random() * 60}, 0.2)`);
-      grd.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = grd;
-      ctx.fillRect(0, 0, 512, 512);
+    ctx.fillStyle = "#03060f";
+    ctx.fillRect(0, 0, 1024, 1024);
+    // Tiny hard dots only — no nebula gradients, no soft discs.
+    for (let i = 0; i < 320; i++) {
+      const x = Math.floor(Math.random() * 1024);
+      const y = Math.floor(Math.random() * 1024);
+      const bright = 180 + Math.floor(Math.random() * 75);
+      const size = Math.random() < 0.12 ? 2 : 1;
+      ctx.fillStyle = `rgb(${bright},${bright},${Math.min(255, bright + 20)})`;
+      ctx.fillRect(x, y, size, size);
     }
     tex.update();
     const mat = new StandardMaterial("starMat", this.scene);
@@ -188,29 +221,31 @@ export class SpaceView {
     return plane;
   }
 
-  /** Muzzle of the cannon nearest to world X (missiles launch from here). */
+  /** Muzzle of the cannon nearest to world X (missiles launch upward from here). */
   cannonMuzzle(targetX: number): Vector3 {
     const i = Math.abs(targetX - CANNON_X[0]) <= Math.abs(targetX - CANNON_X[1]) ? 0 : 1;
-    return new Vector3(CANNON_X[i], STATION_DECK_Y + 1.15, -1.35);
+    return new Vector3(CANNON_X[i], STATION_DECK_Y + 2.6, -0.35);
   }
 
   private makeBody(id: string, kind: BodyKind, label: number): BodyMesh {
-    const root = CreateSphere(`body-${id}`, { diameter: kind === "bonus" ? 0.85 : 1.25, segments: 14 }, this.scene);
+    const root = CreateSphere(`body-${id}`, { diameter: kind === "bonus" ? 1.0 : 1.45, segments: 14 }, this.scene);
     const mat = new StandardMaterial(`bodyMat-${id}`, this.scene);
     if (kind === "bonus") {
-      mat.diffuseColor = new Color3(0.3, 0.95, 0.7);
-      mat.emissiveColor = new Color3(0.1, 0.4, 0.25);
+      mat.diffuseColor = new Color3(0.25, 0.95, 0.7);
+      mat.emissiveColor = new Color3(0.15, 0.45, 0.3);
     } else {
-      mat.diffuseColor = new Color3(0.75, 0.45, 0.35);
-      mat.emissiveColor = new Color3(0.2, 0.08, 0.05);
+      // Bright rock so it pops against the dark sky.
+      mat.diffuseColor = new Color3(0.9, 0.55, 0.35);
+      mat.emissiveColor = new Color3(0.35, 0.15, 0.08);
     }
     root.material = mat;
 
-    const labelPlane = CreatePlane(`label-${id}`, { size: 1.05 }, this.scene);
+    const labelPlane = CreatePlane(`label-${id}`, { size: 1.2 }, this.scene);
     labelPlane.parent = root;
-    labelPlane.position = new Vector3(0, 0, -0.7);
+    labelPlane.position = new Vector3(0, 0, -0.8);
     labelPlane.billboardMode = 7;
     const texture = new DynamicTexture(`labelTex-${id}`, { width: 128, height: 128 }, this.scene, false);
+    texture.updateSamplingMode(Texture.BILINEAR_SAMPLINGMODE);
     const labelMat = new StandardMaterial(`labelMat-${id}`, this.scene);
     labelMat.diffuseTexture = texture;
     labelMat.emissiveTexture = texture;
@@ -231,7 +266,7 @@ export class SpaceView {
     ctx.beginPath();
     ctx.arc(64, 64, 54, 0, Math.PI * 2);
     if (body.kind === "bonus") {
-      ctx.fillStyle = selected ? "rgba(120, 255, 210, 0.92)" : "rgba(8, 40, 32, 0.82)";
+      ctx.fillStyle = selected ? "rgba(120, 255, 210, 0.95)" : "rgba(8, 40, 32, 0.88)";
       ctx.fill();
       ctx.lineWidth = 4;
       ctx.strokeStyle = "#7dffc8";
@@ -242,10 +277,10 @@ export class SpaceView {
       ctx.textBaseline = "middle";
       ctx.fillText("\u{1F6E1}", 64, 66);
     } else {
-      ctx.fillStyle = selected ? "rgba(255, 220, 120, 0.92)" : "rgba(12, 20, 40, 0.78)";
+      ctx.fillStyle = selected ? "rgba(255, 220, 120, 0.95)" : "rgba(12, 20, 40, 0.88)";
       ctx.fill();
       ctx.lineWidth = 4;
-      ctx.strokeStyle = selected ? "#ffe08a" : "rgba(180, 210, 255, 0.55)";
+      ctx.strokeStyle = selected ? "#ffe08a" : "rgba(180, 210, 255, 0.65)";
       ctx.stroke();
       ctx.fillStyle = selected ? "#1a1408" : "#f4f7ff";
       ctx.font = "bold 48px system-ui, sans-serif";
@@ -264,8 +299,8 @@ export class SpaceView {
       let mesh = this.bodies.get(b.id);
       if (!mesh) mesh = this.makeBody(b.id, b.kind, b.label);
       mesh.root.position.set(b.x, b.y, b.z);
-      const scale = b.burning ? 0.2 + (1 - (b.hitFlash ?? 0)) * 0.5 : 1 + (b.selected ? 0.12 : 0);
-      mesh.root.scaling.setAll(scale * (b.kind === "bonus" ? 0.85 : 1));
+      const scale = b.burning ? 0.2 + (1 - (b.hitFlash ?? 0)) * 0.5 : 1 + (b.selected ? 0.14 : 0);
+      mesh.root.scaling.setAll(scale * (b.kind === "bonus" ? 0.9 : 1));
       const selected = !!b.selected;
       if (mesh.label !== b.label || mesh.selected !== selected) {
         this.paintLabel(mesh, b.label, selected);
@@ -276,7 +311,7 @@ export class SpaceView {
         const flash = b.hitFlash ?? 0;
         mat.emissiveColor = b.burning
           ? new Color3(1, 0.55, 0.15)
-          : new Color3(0.2 + flash * 0.6, 0.08 + flash * 0.2, 0.05);
+          : new Color3(0.35 + flash * 0.5, 0.15 + flash * 0.25, 0.08);
       } else {
         mat.emissiveColor = new Color3(0.15, 0.55 + Math.sin(this.time * 4) * 0.15, 0.35);
       }
@@ -298,7 +333,7 @@ export class SpaceView {
       const t = 1 - s.life / s.maxLife;
       const pos = Vector3.Lerp(s.from, s.to, Math.min(1, t));
       if (!mesh) {
-        mesh = CreateSphere(`shot-${s.id}`, { diameter: 0.26, segments: 8 }, this.scene);
+        mesh = CreateSphere(`shot-${s.id}`, { diameter: 0.28, segments: 8 }, this.scene);
         const mat = new StandardMaterial(`shotMat-${s.id}`, this.scene);
         mat.emissiveColor = s.success ? new Color3(0.45, 1, 0.75) : new Color3(1, 0.35, 0.3);
         mat.disableLighting = true;
@@ -319,17 +354,14 @@ export class SpaceView {
   update(dt: number, shieldCharges: number): void {
     this.time += dt;
     this.pulse += dt;
-    // Gentle bob so the station feels alive without changing the Tetris layout.
-    this.camera.position.x = Math.sin(this.time * 0.12) * 0.15;
-    this.starField.position.y = 9 + Math.sin(this.time * 0.08) * 0.2;
     for (const cannon of this.cannons) {
-      cannon.scaling.y = 1 + Math.sin(this.pulse * 3 + cannon.position.x) * 0.03;
+      cannon.scaling.y = 1 + Math.sin(this.pulse * 2.8 + cannon.position.x) * 0.04;
     }
     if (this.stationShield) {
-      this.stationShield.scaling.y = 1 + Math.sin(this.pulse * 2.4) * 0.06;
+      this.stationShield.scaling.y = 1 + Math.sin(this.pulse * 2.4) * 0.05;
       this.stationShield.isVisible = shieldCharges > 0;
       const mat = this.stationShield.material as StandardMaterial;
-      mat.alpha = 0.1 + Math.min(0.22, shieldCharges * 0.08);
+      mat.alpha = 0.12 + Math.min(0.2, shieldCharges * 0.07);
     }
   }
 

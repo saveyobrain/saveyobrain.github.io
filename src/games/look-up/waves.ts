@@ -32,9 +32,9 @@ export function waveConfig(wave: number, difficulty: Difficulty): WaveConfig {
   const minValue = Math.min(4 + Math.floor((w - 1) * 1.5 * scale.size), 40);
   const maxValue = Math.min(10 + Math.floor(w * 4 * scale.size), 120);
   const count = Math.min(3 + Math.floor((w - 1) * 0.6), 8);
-  // Much slower early on: ~0.16 u/s on wave 1 normal (~90s from spawn to impact),
-  // then a gentle ramp so later waves still feel learnable.
-  const speed = (0.16 + (w - 1) * 0.028) * scale.speed;
+  // Slow early waves, but fast enough that motion is obvious within a few seconds.
+  // Wave 1 normal ≈ 0.22 u/s → ~45s from top of frame to the deck.
+  const speed = (0.22 + (w - 1) * 0.035) * scale.speed;
   const bonusChance = w >= 2 ? Math.min(0.15 + w * 0.03, 0.45) : 0;
   return { wave: w, count, minValue, maxValue, speed, bonusChance };
 }
