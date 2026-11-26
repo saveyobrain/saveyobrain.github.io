@@ -94,10 +94,11 @@ export interface Strings {
     lives: (n: number, max: number) => string;
     shields: (n: number) => string;
     taskPrompt: (n: number) => string;
+    /** Numbered life: a proper divisor collects it. */
+    lifePrompt: (n: number) => string;
+    /** Numbered shield: a proper divisor collects it. */
+    shieldPrompt: (n: number) => string;
     pickTarget: string;
-    collectShield: string;
-    collectLife: string;
-    collect: string;
     waveClear: string;
     waveClearHint: string;
     nextWave: string;

@@ -226,6 +226,27 @@ export function placeAroundBreak(
 }
 
 /**
+ * Fall-speed multiplier by distance to the station.
+ * Off-screen and just entering is a bit faster so a rock shows up;
+ * the pace eases down as it nears the deck.
+ */
+export const APPROACH_FAST = 1.55;
+export const APPROACH_SLOW = 0.68;
+/** Distance (world units) where the fast pace is fully on. */
+export const APPROACH_FAST_DIST = 11;
+/** Distance where the slow pace is fully on. */
+export const APPROACH_SLOW_DIST = 3.4;
+
+export function approachSpeedScale(distToImpact: number): number {
+  const dist = Math.max(0, distToImpact);
+  if (dist >= APPROACH_FAST_DIST) return APPROACH_FAST;
+  if (dist <= APPROACH_SLOW_DIST) return APPROACH_SLOW;
+  const t = (dist - APPROACH_SLOW_DIST) / (APPROACH_FAST_DIST - APPROACH_SLOW_DIST);
+  const s = t * t * (3 - 2 * t);
+  return APPROACH_SLOW + (APPROACH_FAST - APPROACH_SLOW) * s;
+}
+
+/**
  * Local Z pitch so a barrel aims at world offset (dx, dy).
  * The painted barrel rests up-right. `flip` is -1 on the mirrored left mount,
  * so dx is converted into that mount's local frame.

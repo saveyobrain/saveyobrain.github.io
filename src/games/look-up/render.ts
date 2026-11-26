@@ -20,10 +20,13 @@ import { TIER_KITS, type StationTier, type TierArtKit } from "./art";
 import { IMPACT_Y, barrelPitch, frustumAtPlane, type PlayFrustum } from "./spawn";
 
 export {
+  APPROACH_FAST,
+  APPROACH_SLOW,
   FRUSTUM_MARGIN,
   IMPACT_Y,
   MIN_SEPARATION,
   PLAYFIELD_HALF,
+  approachSpeedScale,
   pickApproachSpawn,
   pickSeparatedApproach,
   placeAroundBreak,
@@ -525,10 +528,9 @@ export class SpaceView {
     ctx.arc(c, c, s * 0.42, 0, Math.PI * 2);
     if (body.kind === "shield" || body.kind === "life") {
       const life = body.kind === "life";
+      const text = String(label);
       ctx.fillStyle = selected
-        ? life
-          ? "rgba(255, 186, 196, 0.97)"
-          : "rgba(120, 255, 210, 0.96)"
+        ? "rgba(255, 214, 96, 0.97)"
         : life
           ? "rgba(42, 10, 16, 0.94)"
           : "rgba(4, 28, 22, 0.94)";
@@ -536,11 +538,15 @@ export class SpaceView {
       ctx.lineWidth = 10;
       ctx.strokeStyle = life ? "#ffd0d8" : "#b8ffe4";
       ctx.stroke();
-      ctx.fillStyle = selected ? (life ? "#4a1020" : "#063328") : "#f4fffb";
-      ctx.font = "500 104px system-ui, sans-serif";
+      const fontPx = text.length >= 3 ? 78 : text.length === 1 ? 118 : 100;
+      ctx.font = `400 ${fontPx}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(life ? "\u2665" : "\u{1F6E1}", c, c + 4);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = selected ? "#1a1408" : life ? "#2a0810" : "#021810";
+      ctx.strokeText(text, c, c + 4);
+      ctx.fillStyle = selected ? "#1a1408" : "#ffffff";
+      ctx.fillText(text, c, c + 4);
     } else {
       const text = String(label);
       ctx.fillStyle = selected ? "rgba(255, 214, 96, 0.97)" : "rgba(6, 12, 28, 0.94)";

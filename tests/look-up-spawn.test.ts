@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createRng } from "../src/core/math/rng";
 import {
+  APPROACH_FAST,
+  APPROACH_FAST_DIST,
+  APPROACH_SLOW,
+  APPROACH_SLOW_DIST,
   FRUSTUM_MARGIN,
   MIN_SEPARATION,
   SPLIT_SEPARATION,
+  approachSpeedScale,
   barrelPitch,
   frustumAtPlane,
   isInsideFrustum,
@@ -113,6 +118,21 @@ describe("look-up spawn", () => {
         expect(Math.abs(p.targetX - o.targetX)).toBeGreaterThanOrEqual(1.15 - 0.01);
       }
     }
+  });
+
+  it("falls a bit faster far away and eases down near the station", () => {
+    expect(approachSpeedScale(APPROACH_FAST_DIST + 4)).toBe(APPROACH_FAST);
+    expect(approachSpeedScale(APPROACH_FAST_DIST)).toBe(APPROACH_FAST);
+    expect(approachSpeedScale(APPROACH_SLOW_DIST)).toBe(APPROACH_SLOW);
+    expect(approachSpeedScale(0)).toBe(APPROACH_SLOW);
+    expect(APPROACH_FAST).toBeGreaterThan(1);
+    expect(APPROACH_FAST).toBeLessThan(1.8);
+    expect(APPROACH_SLOW).toBeLessThan(1);
+    const mid = (APPROACH_FAST_DIST + APPROACH_SLOW_DIST) / 2;
+    const atMid = approachSpeedScale(mid);
+    expect(atMid).toBeGreaterThan(APPROACH_SLOW);
+    expect(atMid).toBeLessThan(APPROACH_FAST);
+    expect(approachSpeedScale(mid + 1)).toBeGreaterThan(atMid);
   });
 
   it("pitches each barrel toward the target", () => {

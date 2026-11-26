@@ -20,6 +20,7 @@ import {
   burnScore,
   burnsHarmlessly,
   choiceOptions,
+  pickComposite,
   splitDivisors,
   splitScore,
 } from "./math";
@@ -27,6 +28,7 @@ import { tierForWave } from "./art";
 import {
   IMPACT_Y,
   SpaceView,
+  approachSpeedScale,
   pickSeparatedApproach,
   placeAroundBreak,
   splitRingOffsets,
@@ -55,7 +57,7 @@ interface Body {
   id: string;
   kind: "asteroid" | "shield" | "life";
   label: number;
-  /** Set once a shield or life has been granted, so impact cannot grant it twice. */
+  /** Set once a correct divisor has granted this shield or life. */
   collected?: boolean;
   x: number;
   y: number;
@@ -229,7 +231,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     bodies.push({
       id: String(nextId++),
       kind,
-      label: 0,
+      label: pickComposite(rng, activeCfg.minValue, activeCfg.maxValue),
       x: p.x,
       y: Math.max(p.y, 6),
       z: p.z,
@@ -292,13 +294,10 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     return bodies.find((b) => b.id === selectedId && !b.burning);
   }
 
-  function showCollectTask(body: Body): void {
-    taskForId = body.id;
-    const text = body.kind === "life" ? t.collectLife : t.collectShield;
-    task = { kind: "div", text, answer: 0, options: [0], labels: [t.collect] };
-    panel.el.classList.remove("lup-idle");
-    panel.show(task);
-    panel.setEnabled(state === "playing" && feedbackTimer <= 0);
+  function promptFor(body: Body): string {
+    if (body.kind === "life") return t.lifePrompt(body.label);
+    if (body.kind === "shield") return t.shieldPrompt(body.label);
+    return t.taskPrompt(body.label);
   }
 
   function showTaskForSelection(): void {
@@ -310,10 +309,6 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       panel.setEnabled(false);
       return;
     }
-    if (body.kind === "shield" || body.kind === "life") {
-      showCollectTask(body);
-      return;
-    }
     panel.el.classList.remove("lup-idle");
     if (!(task && taskForId === body.id)) {
       taskForId = body.id;
@@ -321,7 +316,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       // answer field unused for validation — we check isValidSplit on pick.
       task = {
         kind: "div",
-        text: t.taskPrompt(body.label),
+        text: promptFor(body),
         answer: options.find((d) => splitDivisors(body.label).includes(d)) ?? options[0],
         options,
       };
@@ -462,48 +457,49 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     if (state !== "playing" || feedbackTimer > 0 || !task || index >= task.options.length) return;
     const body = selectedBody();
     if (!body) return;
-    if (body.kind === "shield" || body.kind === "life") {
-      if (index !== 0) return;
-      beginCollect(body);
-      return;
-    }
 
     const pick = task.options[index];
     const correctIndex = task.options.findIndex((d) => splitDivisors(body.label).includes(d));
     const result = applySplit(body.label, pick);
     const correct = result.ok;
+    const pickup = body.kind === "shield" || body.kind === "life";
 
     if (correct && result.ok) {
       fireShot(body, true);
       score += splitScore(body.label, pick);
-      // Replace the hit body with children on a spaced ring around the parent.
-      body.burning = true;
-      body.burnTimer = BURN_LIFE * 0.35;
-      const children = result.children;
-      const ring = splitRingOffsets(children.length, rng);
-      const placed = bodies.filter((b) => !b.burning).map((b) => ({ x: b.x, y: b.y }));
-      placed.push({ x: body.x, y: body.y });
-      children.forEach((label, i) => {
-        const off = ring[i] ?? { dx: 0, dy: 1.4, dz: 0 };
-        const p = placeAroundBreak(body, off, placed);
-        placed.push({ x: p.x, y: p.y });
-        const child: Body = {
-          id: String(nextId++),
-          kind: "asteroid",
-          label,
-          x: p.x,
-          y: p.y,
-          z: p.z,
-          targetX: Math.max(-5.2, Math.min(5.2, p.x * 0.7)),
-          speed: body.speed * 1.02,
-          burning: burnsHarmlessly(label),
-          burnTimer: burnsHarmlessly(label) ? BURN_LIFE : 0,
-          hitFlash: 0.6,
-          inbound: false,
-        };
-        if (child.burning) score += burnScore(label);
-        bodies.push(child);
-      });
+      if (pickup) {
+        // A proper divisor collects the numbered life or shield. It does not split into rocks.
+        collectPickup(body);
+      } else {
+        // Replace the hit body with children on a spaced ring around the parent.
+        body.burning = true;
+        body.burnTimer = BURN_LIFE * 0.35;
+        const children = result.children;
+        const ring = splitRingOffsets(children.length, rng);
+        const placed = bodies.filter((b) => !b.burning).map((b) => ({ x: b.x, y: b.y }));
+        placed.push({ x: body.x, y: body.y });
+        children.forEach((label, i) => {
+          const off = ring[i] ?? { dx: 0, dy: 1.4, dz: 0 };
+          const p = placeAroundBreak(body, off, placed);
+          placed.push({ x: p.x, y: p.y });
+          const child: Body = {
+            id: String(nextId++),
+            kind: "asteroid",
+            label,
+            x: p.x,
+            y: p.y,
+            z: p.z,
+            targetX: Math.max(-5.2, Math.min(5.2, p.x * 0.7)),
+            speed: body.speed * 1.02,
+            burning: burnsHarmlessly(label),
+            burnTimer: burnsHarmlessly(label) ? BURN_LIFE : 0,
+            hitFlash: 0.6,
+            inbound: false,
+          };
+          if (child.burning) score += burnScore(label);
+          bodies.push(child);
+        });
+      }
       panel.showResult(index, index);
     } else {
       fireShot(body, false);
@@ -516,15 +512,6 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     syncHud();
     panel.setEnabled(false);
     feedbackTimer = correct ? FEEDBACK_OK : FEEDBACK_BAD;
-  }
-
-  function beginCollect(body: Body): void {
-    if (body.collected || body.burning) return;
-    fireShot(body, true);
-    collectPickup(body);
-    panel.showResult(0, 0);
-    panel.setEnabled(false);
-    feedbackTimer = FEEDBACK_OK;
   }
 
   function collectPickup(body: Body): void {
@@ -547,7 +534,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     body.burning = true;
     body.burnTimer = BURN_LIFE * 0.5;
     if (body.kind === "shield" || body.kind === "life") {
-      collectPickup(body);
+      // Reaching the deck without a divisor does not grant the life or shield.
       return;
     }
     if (shields > 0) {
@@ -611,16 +598,6 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     if (!id) return;
     const body = bodies.find((b) => b.id === id && !b.burning);
     if (!body) return;
-    if (body.kind === "shield" || body.kind === "life") {
-      if (selectedId === body.id && aimLock && feedbackTimer <= 0) {
-        beginCollect(body);
-        return;
-      }
-      selectedId = body.id;
-      aimLock = true;
-      showTaskForSelection();
-      return;
-    }
     selectedId = body.id;
     aimLock = true;
     showTaskForSelection();
@@ -670,7 +647,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         impact(body);
         continue;
       }
-      const step = Math.min(body.speed * dt, dist);
+      // Faster while still far (off-screen or just entering); slower near the deck.
+      const step = Math.min(body.speed * approachSpeedScale(dist) * dt, dist);
       body.x += (dx / dist) * step;
       body.y += (dy / dist) * step;
       body.z *= 0.985;
@@ -736,7 +714,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     const visuals: BodyVisual[] = bodies.map((b) => ({
       id: b.id,
       kind: b.kind,
-      label: b.kind === "asteroid" ? b.label : 0,
+      label: b.label,
       x: b.x,
       y: b.y,
       z: b.z,
