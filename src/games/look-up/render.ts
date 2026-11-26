@@ -131,35 +131,56 @@ function rockPalette(seed: number): { diffuse: Color3; emissive: Color3 } {
 }
 
 /**
- * Box slab with vertical corner cylinders so the silhouette reads rounded,
- * without switching to the wide globe-style hull.
+ * Same boxy slab proportions, but softens the camera-facing corners/edges:
+ * larger front vertical fillets, a rounded front-top lip, and corner spheres.
+ * Back stays mostly square so we don't redesign the station.
  */
-function roundedSlab(
+function softFrontSlab(
   scene: Scene,
   name: string,
   width: number,
   height: number,
   depth: number,
   position: Vector3,
-  cornerR: number,
+  frontR: number,
   mat: StandardMaterial,
 ): void {
-  const r = Math.min(cornerR, width * 0.2, depth * 0.45);
-  const core = CreateBox(`${name}Core`, { width: width - 2 * r, height, depth }, scene);
-  core.position = position.clone();
+  const r = Math.min(frontR, width * 0.22, depth * 0.5, height * 0.85);
+  const core = CreateBox(`${name}Core`, { width: width - 2 * r, height, depth: depth - r * 0.35 }, scene);
+  core.position = new Vector3(position.x, position.y, position.z + r * 0.15);
   core.material = mat;
+
+  // Front-left / front-right vertical fillets (the corners you actually see).
   for (const sx of [-1, 1] as const) {
-    for (const sz of [-1, 1] as const) {
-      const post = CreateCylinder(`${name}Corner${sx}${sz}`, { height, diameter: r * 2 }, scene);
-      post.position = new Vector3(position.x + sx * (width / 2 - r), position.y, position.z + sz * (depth / 2 - r));
-      post.material = mat;
-    }
-  }
-  // Side filler strips so the rounded corners don't leave gaps on X edges.
-  for (const sx of [-1, 1] as const) {
+    const post = CreateCylinder(`${name}FrontPost${sx}`, { height, diameter: r * 2 }, scene);
+    post.position = new Vector3(position.x + sx * (width / 2 - r), position.y, position.z - (depth / 2 - r));
+    post.material = mat;
+
+    // Milder rear posts so the slab isn't a razor table from an angle.
+    const rear = CreateCylinder(`${name}RearPost${sx}`, { height, diameter: r * 1.15 }, scene);
+    rear.position = new Vector3(position.x + sx * (width / 2 - r * 0.55), position.y, position.z + (depth / 2 - r * 0.55));
+    rear.material = mat;
+
     const side = CreateBox(`${name}Side${sx}`, { width: r * 2, height, depth: depth - 2 * r }, scene);
     side.position = new Vector3(position.x + sx * (width / 2 - r), position.y, position.z);
     side.material = mat;
+  }
+
+  // Front-top lip: horizontal cylinder so the deck edge isn't a hard table cut.
+  const lip = CreateCylinder(`${name}FrontLip`, { height: width - 2 * r, diameter: Math.min(r * 1.35, height * 1.6) }, scene);
+  lip.rotation.z = Math.PI / 2;
+  lip.position = new Vector3(position.x, position.y + height / 2 - r * 0.15, position.z - (depth / 2 - r * 0.55));
+  lip.material = mat;
+
+  // Spherical blends at the two visible front-top corners.
+  for (const sx of [-1, 1] as const) {
+    const cap = CreateSphere(`${name}FrontCap${sx}`, { diameter: r * 1.7, segments: 14 }, scene);
+    cap.position = new Vector3(
+      position.x + sx * (width / 2 - r),
+      position.y + height / 2 - r * 0.2,
+      position.z - (depth / 2 - r),
+    );
+    cap.material = mat;
   }
 }
 
@@ -196,12 +217,12 @@ export class SpaceView {
   }
 
   private buildStation(): void {
-    // Previous boxy hull/deck (pre-globe redesign), with rounded corners only.
+    // Same boxy station — only soften the visible front corners / top lip.
     const hullMat = litMat(this.scene, "hullMat", new Color3(0.22, 0.3, 0.4), new Color3(0.05, 0.09, 0.14));
-    roundedSlab(this.scene, "stationHull", 13.5, 2.8, 2.6, new Vector3(0, -0.7, 0.4), 0.55, hullMat);
+    softFrontSlab(this.scene, "stationHull", 13.5, 2.8, 2.6, new Vector3(0, -0.7, 0.4), 0.85, hullMat);
 
     const deckMat = litMat(this.scene, "deckMat", new Color3(0.4, 0.62, 0.78), new Color3(0.1, 0.22, 0.3));
-    roundedSlab(this.scene, "stationDeck", 12, 0.28, 2.2, new Vector3(0, STATION_DECK_Y, 0.1), 0.45, deckMat);
+    softFrontSlab(this.scene, "stationDeck", 12, 0.28, 2.2, new Vector3(0, STATION_DECK_Y, 0.1), 0.7, deckMat);
 
     for (let i = -4; i <= 4; i++) {
       const seam = CreateBox(`seam-${i}`, { width: 0.08, height: 0.06, depth: 1.9 }, this.scene);
