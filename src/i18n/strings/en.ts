@@ -100,8 +100,8 @@ export const en: Strings = {
   lookUp: {
     title: "Look UP",
     pageTitle: "Look UP free divisor math game - Save Yo Brain",
-    // Later, if enemies are added: "…break asteroids and enemies."
-    description: "Protect the space station: fire proper divisors to break asteroids.",
+    // Later, if enemies are added: "Break asteroids and enemies."
+    description: "Protect the space station. Pick correct divisors. Break asteroids.",
     introGoal: "Numbered asteroids fall toward your space station. Split them with the cannons before they hit the deck.",
     introRules:
       "Pick a proper divisor D of N (not 1, not N). A hit splits the rock into D pieces labeled N\u00f7D. Odd primes burn safely. Wrong picks ricochet.",
