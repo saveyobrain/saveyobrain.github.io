@@ -1247,6 +1247,15 @@ button {
   border: 1px solid rgba(120, 180, 255, 0.22);
 }
 
+/* Lives / shields / score sit under the wave row, left side, so top-center entries stay clear. */
+.game-root.look-up .lup-status {
+  bottom: auto;
+  top: calc(max(8px, env(safe-area-inset-top)) + 44px);
+  left: 12px;
+  right: auto;
+  transform: none;
+}
+
 .game-root.look-up .lup-lives.critical {
   color: #ffb4b4;
   border-color: rgba(255, 120, 120, 0.45);

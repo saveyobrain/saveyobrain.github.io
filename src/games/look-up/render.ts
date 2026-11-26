@@ -7,7 +7,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import { CreateIcoSphere } from "@babylonjs/core/Meshes/Builders/icoSphereBuilder";
 import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import { Material } from "@babylonjs/core/Materials/material";
@@ -16,6 +16,18 @@ import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTextur
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder";
 import { TIER_KITS, type StationTier, type TierArtKit } from "./art";
+import { IMPACT_Y, barrelPitch, frustumAtPlane, type PlayFrustum } from "./spawn";
+
+export {
+  FRUSTUM_MARGIN,
+  IMPACT_Y,
+  PLAYFIELD_HALF,
+  pickApproachSpawn,
+  spawnAbove,
+  splitRingOffsets,
+  type ApproachSpawn,
+  type PlayFrustum,
+} from "./spawn";
 
 export type BodyKind = "asteroid" | "bonus";
 
@@ -68,14 +80,13 @@ interface CannonRig {
   muzzleLocal: Vector3;
 }
 
-/** Half-width of the play lane (world X). */
-export const PLAYFIELD_HALF = 5.2;
-/** Y of the station deck top. */
-export const STATION_DECK_Y = 0.4;
-/** Asteroids hit the station when they reach this height. */
-export const IMPACT_Y = 1.7;
-/** Margin past the live frustum edge so rocks start off-screen but enter fast. */
-export const FRUSTUM_MARGIN = 0.55;
+/** Deck plate width. Short enough that a phone still shows both hardpoints. */
+const DECK_WORLD_W = 11.4;
+/** Tilt back so the top lip recedes slightly. */
+const DECK_TILT = 0.14;
+/** Tier-1 plate: metal lip image v. Above this row the JPG is starfield. */
+const DECK_LIP_V = 0.2;
+const LABEL_PX = 256;
 
 function litMat(scene: Scene, name: string, diffuse: Color3, emissive: Color3, specular = 0.35): StandardMaterial {
   const m = new StandardMaterial(name, scene);
@@ -162,8 +173,6 @@ function planeUvToLocal(u: number, v: number, width: number, height: number): Ve
   return new Vector3((u - 0.5) * width, (0.5 - v) * height, 0);
 }
 
-const DECK_WORLD_W = 14.8;
-
 /** Front-facing space view: painted deck billboard + layered PNG turrets that aim. */
 export class SpaceView {
   readonly camera: TargetCamera;
@@ -180,9 +189,11 @@ export class SpaceView {
 
   constructor(private readonly scene: Scene) {
     scene.clearColor = new Color4(0.015, 0.03, 0.07, 1);
-    // Keep depth when drawing turret layers above the deck plate.
-    scene.setRenderingAutoClearDepthStencil(1, false, false, false);
-    scene.setRenderingAutoClearDepthStencil(2, false, false, false);
+    // Later groups clear depth so sprites composite above the deck and rocks:
+    // 1 turret bases, 2 barrels, 3 number badges.
+    scene.setRenderingAutoClearDepthStencil(1, true, true, false);
+    scene.setRenderingAutoClearDepthStencil(2, true, true, false);
+    scene.setRenderingAutoClearDepthStencil(3, true, true, false);
 
     this.camera = new TargetCamera("cam", new Vector3(0, 6.4, -17.5), scene);
     this.camera.setTarget(new Vector3(0, 6.4, 0));
@@ -270,19 +281,25 @@ export class SpaceView {
     // Hide until textures decode so start doesn't flash oversized/untextured planes.
     root.setEnabled(false);
 
-    // Dark under-hull so the deck billboard has a solid silhouette edge.
-    const hull = CreateBox("stationHull", { width: 13.2, height: 1.6, depth: 2.4 }, this.scene);
-    hull.parent = root;
-    hull.position = new Vector3(0, -0.55, 0.65);
-    hull.material = litMat(this.scene, "hullMat", new Color3(0.08, 0.12, 0.18), new Color3(0.02, 0.04, 0.07), 0.15);
-
     // Deck plate — world size matches image aspect so hardpoint UVs stay true.
+    // The lip is pinned to IMPACT_Y; everything below it drops off the bottom of the view.
     const deckW = DECK_WORLD_W;
     const deckH = deckW / kit.deckAspect;
+    const lipLocalY = (0.5 - DECK_LIP_V) * deckH;
+    const deckY = IMPACT_Y - lipLocalY * Math.cos(DECK_TILT);
+
+    // Dark under-hull, kept behind the plate and low so it doesn't read as a second station.
+    const hull = CreateBox("stationHull", { width: deckW * 0.72, height: 0.55, depth: 1.8 }, this.scene);
+    hull.parent = root;
+    hull.position = new Vector3(0, deckY - deckH * 0.22, 1.15);
+    hull.renderingGroupId = 0;
+    hull.material = litMat(this.scene, "hullMat", new Color3(0.08, 0.12, 0.18), new Color3(0.02, 0.04, 0.07), 0.15);
+
     const deck = CreatePlane("stationDeckArt", { width: deckW, height: deckH }, this.scene);
     deck.parent = root;
-    deck.position = new Vector3(0, 1.55, 0.4);
-    deck.rotation.x = 0.16;
+    deck.position = new Vector3(0, deckY, 0.35);
+    deck.rotation.x = DECK_TILT;
+    deck.renderingGroupId = 0;
     const deckMat = spriteMat(this.scene, "deckArtMat", kit.deck, false);
     deck.material = deckMat;
     this.deckMat = deckMat;
@@ -291,7 +308,7 @@ export class SpaceView {
       this.buildArtCannon(i, kit.hardpoints[i], kit, deck, deckW, deckH);
     }
 
-    const shield = CreateBox("shieldHint", { width: 12.2, height: 0.55, depth: 2.2 }, this.scene);
+    const shield = CreateBox("shieldHint", { width: deckW * 0.66, height: 0.28, depth: 1.6 }, this.scene);
     shield.parent = root;
     shield.position = new Vector3(0, IMPACT_Y + 0.05, 0.05);
     const shieldMat = new StandardMaterial("shieldMat", this.scene);
@@ -337,7 +354,10 @@ export class SpaceView {
     base.parent = yaw;
     base.position = new Vector3(0, 0, 0);
     base.renderingGroupId = 1;
-    base.material = spriteMat(this.scene, `turretBaseMat-${i}`, kit.basePivot, true);
+    base.alphaIndex = 1;
+    const baseMat = spriteMat(this.scene, `turretBaseMat-${i}`, kit.basePivot, true);
+    baseMat.disableDepthWrite = true;
+    base.material = baseMat;
     base.metadata = { turretSize: size, builtSize: size };
 
     const cradle = planeUvToLocal(kit.baseHingeU, kit.baseHingeV, size, size);
@@ -352,7 +372,10 @@ export class SpaceView {
     barrel.parent = hinge;
     barrel.position = new Vector3(-hingeLocal.x, -hingeLocal.y, 0);
     barrel.renderingGroupId = 2;
-    barrel.material = spriteMat(this.scene, `turretBarrelMat-${i}`, kit.barrel, true);
+    barrel.alphaIndex = 2;
+    const barrelMat = spriteMat(this.scene, `turretBarrelMat-${i}`, kit.barrel, true);
+    barrelMat.disableDepthWrite = true;
+    barrel.material = barrelMat;
     barrel.metadata = { turretSize: size, builtSize: size };
 
     const muzzleLocal = tipLocal.subtract(hingeLocal);
@@ -400,15 +423,9 @@ export class SpaceView {
   /** Frustum half-extents at the play plane (z≈0) for off-screen spawn placement. */
   playFrustum(): PlayFrustum {
     const cam = this.camera;
-    const dist = Math.abs(cam.position.z); // looking toward z=0
-    const halfH = dist * Math.tan(cam.fov * 0.5);
     const engine = this.scene.getEngine();
     const aspect = Math.max(0.5, engine.getAspectRatio(cam));
-    return {
-      halfW: halfH * aspect,
-      halfH,
-      centerY: cam.position.y,
-    };
+    return frustumAtPlane(Math.abs(cam.position.z), cam.fov, aspect, cam.position.y);
   }
 
   /** Aim both cannons toward a world-space point (current target asteroid). */
@@ -421,7 +438,7 @@ export class SpaceView {
     const rig =
       this.cannons.find((c) => Math.abs(c.x - targetX) === Math.min(...this.cannons.map((o) => Math.abs(o.x - targetX)))) ??
       this.cannons[0];
-    if (!rig) return new Vector3(0, STATION_DECK_Y + 1.5, -0.4);
+    if (!rig) return new Vector3(0, IMPACT_Y + 0.4, -0.4);
     return Vector3.TransformCoordinates(rig.muzzleLocal, rig.hinge.getWorldMatrix());
   }
 
@@ -432,17 +449,12 @@ export class SpaceView {
         rig.hinge.rotation.set(0, 0, 0);
         continue;
       }
+      rig.yaw.rotation.set(0, 0, 0);
       const hingeWorld = rig.hinge.getAbsolutePosition();
       const dx = this.aimTarget.x - hingeWorld.x;
       const dy = this.aimTarget.y - hingeWorld.y;
-      // Painted barrel points up-right; left mount mirrors via scale.x = -1.
-      const rest = Math.atan2(rig.muzzleLocal.x, Math.max(0.05, rig.muzzleLocal.y));
-      const wantLocal = Math.atan2(dx * rig.flip, Math.max(0.35, dy));
-      const pitch = Math.max(-1.15, Math.min(1.15, wantLocal - rest));
-      // Negative scale.x mirrors rotation sense — keep world aim coherent.
-      rig.hinge.rotation.z = pitch;
-      const yaw = Math.max(-0.3, Math.min(0.3, -dx * rig.flip * 0.07));
-      rig.yaw.rotation.y = yaw;
+      // Pitch only. Yaw spun the flat sprite through the deck plane.
+      rig.hinge.rotation.z = barrelPitch(rig.muzzleLocal.x, rig.muzzleLocal.y, dx, dy, rig.flip);
     }
   }
 
@@ -467,18 +479,23 @@ export class SpaceView {
     mat.specularColor = kind === "bonus" ? new Color3(0.3, 0.4, 0.35) : new Color3(0.12, 0.1, 0.08);
     root.material = mat;
 
-    const labelPlane = CreatePlane(`label-${id}`, { size: 1.15 }, this.scene);
-    labelPlane.parent = root;
-    labelPlane.position = new Vector3(0, 0, -0.95);
-    labelPlane.billboardMode = 7;
-    const texture = new DynamicTexture(`labelTex-${id}`, { width: 128, height: 128 }, this.scene, false);
+    // World-space badge. Parenting it to the tumbling rock swung the number behind the mesh.
+    const labelPlane = CreatePlane(`label-${id}`, { size: 1.35 }, this.scene);
+    labelPlane.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    labelPlane.renderingGroupId = 3;
+    labelPlane.isPickable = false;
+    const texture = new DynamicTexture(`labelTex-${id}`, { width: LABEL_PX, height: LABEL_PX }, this.scene, false);
+    texture.hasAlpha = true;
     texture.updateSamplingMode(Texture.BILINEAR_SAMPLINGMODE);
     const labelMat = new StandardMaterial(`labelMat-${id}`, this.scene);
     labelMat.diffuseTexture = texture;
     labelMat.emissiveTexture = texture;
     labelMat.opacityTexture = texture;
+    labelMat.useAlphaFromDiffuseTexture = true;
     labelMat.disableLighting = true;
+    labelMat.disableDepthWrite = true;
     labelMat.backFaceCulling = false;
+    labelMat.transparencyMode = Material.MATERIAL_ALPHABLEND;
     labelPlane.material = labelMat;
 
     const body: BodyMesh = { root, labelPlane, texture, label, kind, selected: false, baseDiffuse, baseEmissive };
@@ -489,31 +506,38 @@ export class SpaceView {
 
   private paintLabel(body: BodyMesh, label: number, selected: boolean): void {
     const ctx = body.texture.getContext() as unknown as CanvasRenderingContext2D;
-    ctx.clearRect(0, 0, 128, 128);
+    const s = LABEL_PX;
+    const c = s / 2;
+    ctx.clearRect(0, 0, s, s);
     ctx.beginPath();
-    ctx.arc(64, 64, 54, 0, Math.PI * 2);
+    ctx.arc(c, c, s * 0.42, 0, Math.PI * 2);
     if (body.kind === "bonus") {
-      ctx.fillStyle = selected ? "rgba(120, 255, 210, 0.95)" : "rgba(8, 40, 32, 0.88)";
+      ctx.fillStyle = selected ? "rgba(120, 255, 210, 0.96)" : "rgba(4, 28, 22, 0.94)";
       ctx.fill();
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = "#7dffc8";
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = "#b8ffe4";
       ctx.stroke();
-      ctx.fillStyle = selected ? "#063328" : "#e8fff6";
-      ctx.font = "bold 52px system-ui, sans-serif";
+      ctx.fillStyle = selected ? "#063328" : "#f4fffb";
+      ctx.font = "bold 104px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("\u{1F6E1}", 64, 66);
+      ctx.fillText("\u{1F6E1}", c, c + 4);
     } else {
-      ctx.fillStyle = selected ? "rgba(255, 220, 120, 0.95)" : "rgba(12, 20, 40, 0.88)";
+      const text = String(label);
+      ctx.fillStyle = selected ? "rgba(255, 214, 96, 0.97)" : "rgba(6, 12, 28, 0.94)";
       ctx.fill();
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = selected ? "#ffe08a" : "rgba(180, 210, 255, 0.65)";
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = selected ? "#ffe7a3" : "#f7fbff";
       ctx.stroke();
-      ctx.fillStyle = selected ? "#1a1408" : "#f4f7ff";
-      ctx.font = "bold 48px system-ui, sans-serif";
+      const fontPx = text.length >= 3 ? 78 : text.length === 1 ? 118 : 100;
+      ctx.font = `bold ${fontPx}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(String(label), 64, 66);
+      ctx.lineWidth = 12;
+      ctx.strokeStyle = selected ? "#1a1408" : "#061018";
+      ctx.strokeText(text, c, c + 4);
+      ctx.fillStyle = selected ? "#1a1408" : "#ffffff";
+      ctx.fillText(text, c, c + 4);
     }
     body.texture.update();
     body.label = label;
@@ -533,7 +557,11 @@ export class SpaceView {
         mesh.root.rotation.z = this.time * 0.25;
       }
       const scale = b.burning ? 0.2 + (1 - (b.hitFlash ?? 0)) * 0.5 : 1 + (b.selected ? 0.12 : 0);
-      mesh.root.scaling.setAll(scale * (b.kind === "bonus" ? 0.9 : 1));
+      const bodyScale = scale * (b.kind === "bonus" ? 0.9 : 1);
+      mesh.root.scaling.setAll(bodyScale);
+      // Upright badge centered on the rock, a touch toward the camera.
+      mesh.labelPlane.position.set(b.x, b.y, b.z - 0.45);
+      mesh.labelPlane.scaling.setAll(bodyScale);
       const selected = !!b.selected;
       if (mesh.label !== b.label || mesh.selected !== selected) {
         this.paintLabel(mesh, b.label, selected);
@@ -622,116 +650,4 @@ export class SpaceView {
     }
     return null;
   }
-}
-
-/** Spawn a falling body in a horizontal lane above the station. */
-export function spawnAbove(laneX: number, height: number, depth = 0): { x: number; y: number; z: number } {
-  return {
-    x: Math.max(-PLAYFIELD_HALF, Math.min(PLAYFIELD_HALF, laneX)),
-    y: height,
-    z: depth,
-  };
-}
-
-export interface ApproachSpawn {
-  x: number;
-  y: number;
-  z: number;
-  /** Deck aim point — rock drifts toward (targetX, IMPACT_Y). */
-  targetX: number;
-}
-
-/** Live frustum half-extents at the play plane (z≈0), from the game camera. */
-export interface PlayFrustum {
-  halfW: number;
-  halfH: number;
-  /** World Y of the camera aim / frustum center. */
-  centerY: number;
-}
-
-type ApproachKind = "overTop" | "left" | "right" | "cornerL" | "cornerR";
-
-/**
- * Spawn strictly just outside the live frustum (top / sides / corners only),
- * then drift into view. Never inside the visible rectangle.
- */
-export function pickApproachSpawn(
-  rng: { next(): number; pick<T>(items: readonly T[]): T },
-  frustum: PlayFrustum,
-): ApproachSpawn {
-  const topY = frustum.centerY + frustum.halfH + FRUSTUM_MARGIN;
-  const botY = Math.max(IMPACT_Y + 2.2, frustum.centerY - frustum.halfH * 0.15);
-  const edgeX = frustum.halfW + FRUSTUM_MARGIN;
-  // Prefer top-edge entries so the first rock is visible quickly; still mix sides.
-  const kind = rng.pick<ApproachKind>([
-    "overTop",
-    "overTop",
-    "overTop",
-    "left",
-    "right",
-    "cornerL",
-    "cornerR",
-  ]);
-  const targetX = (rng.next() * 2 - 1) * (PLAYFIELD_HALF * 0.55);
-  const z = (rng.next() - 0.5) * 0.35;
-  switch (kind) {
-    case "overTop": {
-      // Fully above the top edge; X stays inside the horizontal frame so it drops in cleanly.
-      const x = (rng.next() * 2 - 1) * (frustum.halfW * 0.85);
-      return {
-        x,
-        y: topY + rng.next() * 0.45,
-        z,
-        targetX,
-      };
-    }
-    case "left":
-      return {
-        x: -edgeX - rng.next() * 0.4,
-        // Keep Y inside the vertical frame so the rock is only off horizontally.
-        y: botY + rng.next() * Math.max(1.5, topY - FRUSTUM_MARGIN - botY - 0.8),
-        z: (rng.next() - 0.5) * 0.45,
-        targetX: Math.min(targetX, 0.9),
-      };
-    case "right":
-      return {
-        x: edgeX + rng.next() * 0.4,
-        y: botY + rng.next() * Math.max(1.5, topY - FRUSTUM_MARGIN - botY - 0.8),
-        z: (rng.next() - 0.5) * 0.45,
-        targetX: Math.max(targetX, -0.9),
-      };
-    case "cornerL":
-      return {
-        x: -edgeX - rng.next() * 0.35,
-        y: topY + rng.next() * 0.4,
-        z: -0.1 - rng.next() * 0.2,
-        targetX: Math.min(targetX, 0.2),
-      };
-    case "cornerR":
-      return {
-        x: edgeX + rng.next() * 0.35,
-        y: topY + rng.next() * 0.4,
-        z: -0.1 - rng.next() * 0.2,
-        targetX: Math.max(targetX, -0.2),
-      };
-  }
-}
-
-/** Place split shards on a circle around the parent with generous spacing. */
-export function splitRingOffsets(
-  count: number,
-  rng: { next(): number },
-  radius = 1.85,
-): { dx: number; dy: number; dz: number }[] {
-  const n = Math.max(1, count);
-  const base = rng.next() * Math.PI * 2;
-  return Array.from({ length: n }, (_, i) => {
-    const ang = base + (i * Math.PI * 2) / n + (rng.next() - 0.5) * 0.35;
-    const r = radius * (0.85 + rng.next() * 0.35);
-    return {
-      dx: Math.cos(ang) * r,
-      dy: Math.sin(ang) * r * 0.55,
-      dz: Math.sin(ang * 1.3) * 0.25,
-    };
-  });
 }

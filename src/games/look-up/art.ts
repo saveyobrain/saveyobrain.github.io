@@ -59,7 +59,7 @@ export const TIER_KITS: Record<StationTier, TierArtKit> = {
     hingeV: 0.58,
     tipU: 0.7,
     tipV: 0.36,
-    turretSize: 2.65,
+    turretSize: 2.4,
   },
   2: {
     deck: artUrl("deck-plate-tier-2.jpg"),
@@ -73,7 +73,7 @@ export const TIER_KITS: Record<StationTier, TierArtKit> = {
     hingeV: 0.55,
     tipU: 0.74,
     tipV: 0.32,
-    turretSize: 2.85,
+    turretSize: 2.55,
   },
   3: {
     deck: artUrl("deck-plate-tier-3.jpg"),
@@ -87,7 +87,7 @@ export const TIER_KITS: Record<StationTier, TierArtKit> = {
     hingeV: 0.6,
     tipU: 0.76,
     tipV: 0.3,
-    turretSize: 3.05,
+    turretSize: 2.7,
   },
 };
 
