@@ -36,6 +36,12 @@ export function lookUpArtUrl(file: string): string {
   return artUrl(file);
 }
 
+/**
+ * Every tier uses the tier-1 plate. Tier 2 and 3 plates have turrets painted
+ * into the image, so swapping those decks stacks a second pair on the live sprites.
+ */
+const DECK_PLATE = artUrl("deck-plate-tier-1.jpg");
+
 /** Shared hardpoint UVs measured on deck-plate-tier-1 (768×252). */
 const HARDPOINTS = [
   { u: 0.38, v: 0.468 },
@@ -48,45 +54,46 @@ const HARDPOINTS = [
  */
 export const TIER_KITS: Record<StationTier, TierArtKit> = {
   1: {
-    deck: artUrl("deck-plate-tier-1.jpg"),
+    deck: DECK_PLATE,
     basePivot: artUrl("turret-tier-1-base-pivot.png"),
     barrel: artUrl("turret-tier-1-barrel.png"),
     deckAspect: 768 / 252,
     hardpoints: HARDPOINTS,
     baseHingeU: 0.53,
     baseHingeV: 0.43,
-    hingeU: 0.4,
-    hingeV: 0.58,
-    tipU: 0.7,
-    tipV: 0.36,
+    hingeU: 0.37,
+    hingeV: 0.55,
+    tipU: 0.69,
+    tipV: 0.32,
     turretSize: 2.4,
   },
   2: {
-    deck: artUrl("deck-plate-tier-2.jpg"),
+    deck: DECK_PLATE,
     basePivot: artUrl("turret-tier-2-base-pivot.png"),
     barrel: artUrl("turret-tier-2-barrel.png"),
     deckAspect: 768 / 252,
     hardpoints: HARDPOINTS,
-    baseHingeU: 0.52,
-    baseHingeV: 0.42,
-    hingeU: 0.45,
-    hingeV: 0.55,
-    tipU: 0.74,
-    tipV: 0.32,
+    baseHingeU: 0.5,
+    baseHingeV: 0.36,
+    // This barrel is painted up-left, opposite of tier 1. Pivot at the rear (lower right).
+    hingeU: 0.76,
+    hingeV: 0.57,
+    tipU: 0.27,
+    tipV: 0.3,
     turretSize: 2.55,
   },
   3: {
-    deck: artUrl("deck-plate-tier-3.jpg"),
+    deck: DECK_PLATE,
     basePivot: artUrl("turret-tier-3-base-pivot.png"),
     barrel: artUrl("turret-tier-3-barrel.png"),
     deckAspect: 768 / 252,
     hardpoints: HARDPOINTS,
-    baseHingeU: 0.5,
-    baseHingeV: 0.4,
-    hingeU: 0.38,
-    hingeV: 0.6,
+    baseHingeU: 0.49,
+    baseHingeV: 0.37,
+    hingeU: 0.25,
+    hingeV: 0.69,
     tipU: 0.76,
-    tipV: 0.3,
+    tipV: 0.27,
     turretSize: 2.7,
   },
 };

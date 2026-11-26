@@ -5,8 +5,11 @@ export const PLAYFIELD_HALF = 5.2;
 /**
  * World Y where rocks meet the station. The deck billboard is placed so its
  * top metal lip sits on this line and the rest of the hull falls below the view.
+ * Lowered so the deck shows about 30% less of the screen than the previous lip.
  */
-export const IMPACT_Y = 1.65;
+export const IMPACT_Y = 0.92;
+/** Minimum centre distance so one rock's badge does not cover another. */
+export const MIN_SEPARATION = 2.55;
 /**
  * Clearance past the frustum edge. Covers the largest rock (≈1.45 world units
  * from centre, plus the selected-scale bump) so a rock is fully hidden at spawn,
@@ -98,6 +101,44 @@ export function pickApproachSpawn(
   }
 }
 
+export interface OccupiedSpot {
+  x: number;
+  y: number;
+  targetX?: number;
+}
+
+/** True when `p` sits on top of an existing rock. */
+export function tooClose(
+  p: { x: number; y: number },
+  others: readonly { x: number; y: number }[],
+  min = MIN_SEPARATION,
+): boolean {
+  return others.some((o) => Math.hypot(p.x - o.x, p.y - o.y) < min);
+}
+
+/**
+ * Like `pickApproachSpawn`, but retry so a new rock does not cover one already in play
+ * and does not share its deck lane.
+ */
+export function pickSeparatedApproach(
+  rng: { next(): number; pick<T>(items: readonly T[]): T },
+  frustum: PlayFrustum,
+  occupied: readonly OccupiedSpot[],
+): ApproachSpawn {
+  let fallback = pickApproachSpawn(rng, frustum);
+  for (let i = 0; i < 14; i++) {
+    const p = i === 0 ? fallback : pickApproachSpawn(rng, frustum);
+    const clear = occupied.every((o) => {
+      const apart = Math.hypot(p.x - o.x, p.y - o.y) >= MIN_SEPARATION;
+      const lane = o.targetX === undefined || Math.abs(p.targetX - o.targetX) >= 1.15;
+      return apart && lane;
+    });
+    if (clear) return p;
+    fallback = p;
+  }
+  return fallback;
+}
+
 /** Clamp a split shard's lane X to the play column. */
 export function spawnAbove(laneX: number, height: number, depth = 0): { x: number; y: number; z: number } {
   return {
@@ -107,23 +148,65 @@ export function spawnAbove(laneX: number, height: number, depth = 0): { x: numbe
   };
 }
 
-/** Place split shards on a circle around the parent with generous spacing. */
+/**
+ * Place split shards on an arc above the break. `dy` is never negative, so a
+ * child does not appear closer to the station than the rock that just split.
+ */
 export function splitRingOffsets(
   count: number,
   rng: { next(): number },
-  radius = 1.85,
+  radius?: number,
 ): { dx: number; dy: number; dz: number }[] {
   const n = Math.max(1, count);
-  const base = rng.next() * Math.PI * 2;
+  const span = Math.PI * 0.76;
+  const step = n <= 1 ? Math.PI : span / (n - 1);
+  const needed = n <= 1 ? 1.5 : MIN_SEPARATION / (2 * Math.sin(step / 2));
+  const r0 = radius ?? Math.max(2.35, needed + 0.2);
+  const jitter = (rng.next() - 0.5) * 0.18;
+  const start = Math.PI * 0.12;
+  const end = Math.PI * 0.88;
   return Array.from({ length: n }, (_, i) => {
-    const ang = base + (i * Math.PI * 2) / n + (rng.next() - 0.5) * 0.35;
-    const r = radius * (0.85 + rng.next() * 0.35);
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    const ang = Math.min(Math.PI - 0.08, Math.max(0.08, start + (end - start) * t + jitter + (rng.next() - 0.5) * 0.1));
+    const rad = r0 * (0.94 + rng.next() * 0.12);
     return {
-      dx: Math.cos(ang) * r,
-      dy: Math.sin(ang) * r * 0.55,
-      dz: Math.sin(ang * 1.3) * 0.25,
+      dx: Math.cos(ang) * rad,
+      dy: Math.sin(ang) * rad,
+      dz: (rng.next() - 0.5) * 0.2,
     };
   });
+}
+
+/**
+ * Drop a shard around the parent. Overlaps are pushed sideways or upward, never
+ * down toward the station, and the result stays at or above the break.
+ */
+export function placeAroundBreak(
+  parent: { x: number; y: number; z: number },
+  offset: { dx: number; dy: number; dz: number },
+  others: readonly { x: number; y: number }[],
+): { x: number; y: number; z: number } {
+  let x = parent.x + offset.dx;
+  let y = parent.y + Math.max(0, offset.dy);
+  for (let pass = 0; pass < 6; pass++) {
+    for (const o of others) {
+      const dx = x - o.x;
+      const dy = y - o.y;
+      const d = Math.hypot(dx, dy);
+      if (d >= MIN_SEPARATION) continue;
+      if (d === 0) {
+        x += MIN_SEPARATION;
+        continue;
+      }
+      const push = MIN_SEPARATION - d;
+      x += (dx / d) * push;
+      if (dy > 0) y += (dy / d) * push;
+    }
+  }
+  if (y < parent.y) y = parent.y;
+  const limit = PLAYFIELD_HALF * 2.2;
+  x = Math.max(-limit, Math.min(limit, x));
+  return { x, y, z: parent.z + offset.dz };
 }
 
 /**

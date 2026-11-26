@@ -27,8 +27,8 @@ import { tierForWave } from "./art";
 import {
   IMPACT_Y,
   SpaceView,
-  pickApproachSpawn,
-  spawnAbove,
+  pickSeparatedApproach,
+  placeAroundBreak,
   splitRingOffsets,
   type BodyVisual,
   type ShotVisual,
@@ -115,6 +115,10 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   let shields = 0;
   let score = 0;
   let selectedId: string | null = null;
+  /** Player tapped or cycled a rock; auto-aim must not steal it. */
+  let aimLock = false;
+  /** Body id the current choice buttons were built for. Wrong answers reuse them. */
+  let taskForId: string | null = null;
   let task: MathTask | undefined;
   let feedbackTimer = 0;
   let bodies: Body[] = [];
@@ -176,8 +180,14 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     return bodies.filter((b) => b.kind === "asteroid" && b.inbound && !b.burning).length;
   }
 
+  function occupiedSpots() {
+    return bodies
+      .filter((b) => !b.burning)
+      .map((b) => ({ x: b.x, y: b.y, targetX: b.targetX }));
+  }
+
   function releaseInbound(label: number): void {
-    const p = pickApproachSpawn(rng, view.playFrustum());
+    const p = pickSeparatedApproach(rng, view.playFrustum(), occupiedSpots());
     bodies.push({
       id: String(nextId++),
       kind: "asteroid",
@@ -195,7 +205,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function releaseBonus(): void {
-    const p = pickApproachSpawn(rng, view.playFrustum());
+    const p = pickSeparatedApproach(rng, view.playFrustum(), occupiedSpots());
     bodies.push({
       id: String(nextId++),
       kind: "bonus",
@@ -254,14 +264,17 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       return;
     }
     panel.el.classList.remove("lup-idle");
-    const options = choiceOptions(body.label, CHOICE_COUNT, rng);
-    // answer field unused for validation — we check isValidSplit on pick.
-    task = {
-      kind: "div",
-      text: t.taskPrompt(body.label),
-      answer: options.find((d) => splitDivisors(body.label).includes(d)) ?? options[0],
-      options,
-    };
+    if (!(task && taskForId === body.id)) {
+      taskForId = body.id;
+      const options = choiceOptions(body.label, CHOICE_COUNT, rng);
+      // answer field unused for validation — we check isValidSplit on pick.
+      task = {
+        kind: "div",
+        text: t.taskPrompt(body.label),
+        answer: options.find((d) => splitDivisors(body.label).includes(d)) ?? options[0],
+        options,
+      };
+    }
     panel.show(task);
     panel.setEnabled(state === "playing" && feedbackTimer <= 0);
   }
@@ -273,6 +286,9 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     bodies = [];
     shots = [];
     selectedId = null;
+    aimLock = false;
+    taskForId = null;
+    task = undefined;
     pendingLabels = rng.shuffle(spawnValues(activeCfg, rng));
     pendingBonus = shouldSpawnBonus(activeCfg, rng);
     spawnCooldown = 0;
@@ -404,14 +420,13 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       body.burning = true;
       body.burnTimer = BURN_LIFE * 0.35;
       const children = result.children;
-      const ring = splitRingOffsets(children.length, rng, 2.15);
+      const ring = splitRingOffsets(children.length, rng);
+      const placed = bodies.filter((b) => !b.burning).map((b) => ({ x: b.x, y: b.y }));
+      placed.push({ x: body.x, y: body.y });
       children.forEach((label, i) => {
-        const off = ring[i] ?? { dx: 0, dy: 0.4, dz: 0 };
-        const p = spawnAbove(
-          body.x + off.dx,
-          Math.max(IMPACT_Y + 1.6, body.y + off.dy),
-          body.z + off.dz,
-        );
+        const off = ring[i] ?? { dx: 0, dy: 1.4, dz: 0 };
+        const p = placeAroundBreak(body, off, placed);
+        placed.push({ x: p.x, y: p.y });
         const child: Body = {
           id: String(nextId++),
           kind: "asteroid",
@@ -419,7 +434,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
           x: p.x,
           y: p.y,
           z: p.z,
-          targetX: body.targetX + off.dx * 0.35,
+          targetX: Math.max(-5.2, Math.min(5.2, p.x * 0.7)),
           speed: body.speed * 1.02,
           burning: burnsHarmlessly(label),
           burnTimer: burnsHarmlessly(label) ? BURN_LIFE : 0,
@@ -433,6 +448,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     } else {
       fireShot(body, false);
       body.hitFlash = 1;
+      // Keep this rock and these buttons. A miss must not reshuffle or retarget.
+      aimLock = true;
       panel.showResult(index, correctIndex >= 0 ? correctIndex : index);
     }
 
@@ -526,6 +543,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       return;
     }
     selectedId = body.id;
+    aimLock = true;
     showTaskForSelection();
   }
   canvas.addEventListener("pointerdown", onPointerDown);
@@ -552,6 +570,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
             ? threats[(idx - 1 + threats.length) % threats.length]
             : threats[(idx + 1) % threats.length];
         selectedId = next.id;
+        aimLock = true;
         showTaskForSelection();
         break;
       }
@@ -578,17 +597,19 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       body.z *= 0.985;
     }
     bodies = bodies.filter((b) => !(b.burning && b.burnTimer <= 0));
-    // Keep auto-target locked to the closest threat as rocks approach.
-    const closest = activeThreats().sort((a, b) => distToImpact(a) - distToImpact(b) || a.y - b.y)[0];
-    if (closest && selectedId !== closest.id && feedbackTimer <= 0) {
-      const current = selectedBody();
-      if (!current || distToImpact(current) > distToImpact(closest) + 0.05) {
-        selectedId = closest.id;
-        showTaskForSelection();
-      }
-    } else if (selectedId && !bodies.some((b) => b.id === selectedId && !b.burning)) {
+    const current = selectedBody();
+    if (!current) {
+      aimLock = false;
       pickDefaultTarget();
       if (feedbackTimer <= 0) showTaskForSelection();
+      return;
+    }
+    if (aimLock || feedbackTimer > 0) return;
+    // No manual target: keep auto-aim on the rock closest to impact.
+    const closest = activeThreats().sort((a, b) => distToImpact(a) - distToImpact(b) || a.y - b.y)[0];
+    if (closest && closest.id !== selectedId && distToImpact(current) > distToImpact(closest) + 0.05) {
+      selectedId = closest.id;
+      showTaskForSelection();
     }
   }
 
@@ -600,7 +621,10 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       if (feedbackTimer > 0) {
         feedbackTimer -= dt;
         if (feedbackTimer <= 0) {
-          pickDefaultTarget();
+          if (!selectedBody()) {
+            aimLock = false;
+            pickDefaultTarget();
+          }
           showTaskForSelection();
         }
       }

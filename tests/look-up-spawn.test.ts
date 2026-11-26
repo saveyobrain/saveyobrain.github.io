@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { createRng } from "../src/core/math/rng";
 import {
   FRUSTUM_MARGIN,
+  MIN_SEPARATION,
   barrelPitch,
   frustumAtPlane,
   isInsideFrustum,
   pickApproachSpawn,
+  pickSeparatedApproach,
+  placeAroundBreak,
   splitRingOffsets,
 } from "../src/games/look-up/spawn";
 
@@ -44,6 +47,42 @@ describe("look-up spawn", () => {
     const ys = ring.map((p) => p.dy);
     expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(1);
     expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(0.4);
+    expect(ys.every((y) => y >= 0)).toBe(true);
+  });
+
+  it("keeps shards at or above the break and clear of each other", () => {
+    const parent = { x: 0.4, y: 6.2, z: 0 };
+    const ring = splitRingOffsets(5, createRng(9));
+    const placed: { x: number; y: number }[] = [{ x: parent.x, y: parent.y }];
+    const shards = ring.map((off) => {
+      const p = placeAroundBreak(parent, off, placed);
+      placed.push(p);
+      return p;
+    });
+    for (const p of shards) expect(p.y).toBeGreaterThanOrEqual(parent.y);
+    for (let i = 0; i < shards.length; i++) {
+      for (let j = i + 1; j < shards.length; j++) {
+        expect(Math.hypot(shards[i].x - shards[j].x, shards[i].y - shards[j].y)).toBeGreaterThanOrEqual(
+          MIN_SEPARATION - 0.05,
+        );
+      }
+    }
+  });
+
+  it("does not drop a new approach on top of a rock already in play", () => {
+    const frustum = frustumAtPlane(CAMERA.distance, CAMERA.fov, 1.6, CAMERA.centerY);
+    const occupied = [
+      { x: 0, y: frustum.centerY + frustum.halfH + FRUSTUM_MARGIN, targetX: 0 },
+      { x: -4, y: 8, targetX: -2 },
+    ];
+    const rng = createRng(21);
+    for (let i = 0; i < 40; i++) {
+      const p = pickSeparatedApproach(rng, frustum, occupied);
+      for (const o of occupied) {
+        expect(Math.hypot(p.x - o.x, p.y - o.y)).toBeGreaterThanOrEqual(MIN_SEPARATION - 0.01);
+        expect(Math.abs(p.targetX - o.targetX)).toBeGreaterThanOrEqual(1.15 - 0.01);
+      }
+    }
   });
 
   it("pitches each barrel toward the target", () => {

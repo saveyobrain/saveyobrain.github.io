@@ -15,17 +15,22 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder";
+import "@babylonjs/core/Culling/ray";
 import { TIER_KITS, type StationTier, type TierArtKit } from "./art";
 import { IMPACT_Y, barrelPitch, frustumAtPlane, type PlayFrustum } from "./spawn";
 
 export {
   FRUSTUM_MARGIN,
   IMPACT_Y,
+  MIN_SEPARATION,
   PLAYFIELD_HALF,
   pickApproachSpawn,
+  pickSeparatedApproach,
+  placeAroundBreak,
   spawnAbove,
   splitRingOffsets,
   type ApproachSpawn,
+  type OccupiedSpot,
   type PlayFrustum,
 } from "./spawn";
 
@@ -182,6 +187,7 @@ export class SpaceView {
   private stationShield: Mesh | null = null;
   private stationRoot: TransformNode | null = null;
   private deckMat: StandardMaterial | null = null;
+  private starTex: DynamicTexture | null = null;
   private tier: StationTier = 1;
   private time = 0;
   private pulse = 0;
@@ -231,11 +237,8 @@ export class SpaceView {
   }
 
   private applyTierTextures(kit: TierArtKit): void {
-    if (this.deckMat) {
-      const deckTex = artTexture(this.scene, kit.deck, false);
-      this.deckMat.diffuseTexture = deckTex;
-      this.deckMat.emissiveTexture = deckTex;
-    }
+    // Keep the tier-1 deck. Higher plates have turrets baked in, which would
+    // stack under the live barrels instead of replacing them.
     for (const rig of this.cannons) {
       const baseMat = rig.basePlane.material as StandardMaterial;
       const barrelMat = rig.barrelPlane.material as StandardMaterial;
@@ -397,8 +400,9 @@ export class SpaceView {
     plane.position = new Vector3(0, 7.5, 6);
     const tex = new DynamicTexture("starTex", { width: 512, height: 512 }, this.scene, false);
     tex.updateSamplingMode(Texture.NEAREST_NEAREST);
-    tex.wrapU = Texture.CLAMP_ADDRESSMODE;
-    tex.wrapV = Texture.CLAMP_ADDRESSMODE;
+    tex.wrapU = Texture.WRAP_ADDRESSMODE;
+    tex.wrapV = Texture.WRAP_ADDRESSMODE;
+    this.starTex = tex;
     const ctx = tex.getContext() as unknown as CanvasRenderingContext2D;
     ctx.fillStyle = "#03060f";
     ctx.fillRect(0, 0, 512, 512);
@@ -483,7 +487,7 @@ export class SpaceView {
     const labelPlane = CreatePlane(`label-${id}`, { size: 1.35 }, this.scene);
     labelPlane.billboardMode = Mesh.BILLBOARDMODE_ALL;
     labelPlane.renderingGroupId = 3;
-    labelPlane.isPickable = false;
+    labelPlane.isPickable = true;
     const texture = new DynamicTexture(`labelTex-${id}`, { width: LABEL_PX, height: LABEL_PX }, this.scene, false);
     texture.hasAlpha = true;
     texture.updateSamplingMode(Texture.BILINEAR_SAMPLINGMODE);
@@ -518,7 +522,7 @@ export class SpaceView {
       ctx.strokeStyle = "#b8ffe4";
       ctx.stroke();
       ctx.fillStyle = selected ? "#063328" : "#f4fffb";
-      ctx.font = "bold 104px system-ui, sans-serif";
+      ctx.font = "500 104px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("\u{1F6E1}", c, c + 4);
@@ -530,10 +534,10 @@ export class SpaceView {
       ctx.strokeStyle = selected ? "#ffe7a3" : "#f7fbff";
       ctx.stroke();
       const fontPx = text.length >= 3 ? 78 : text.length === 1 ? 118 : 100;
-      ctx.font = `bold ${fontPx}px system-ui, sans-serif`;
+      ctx.font = `400 ${fontPx}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.lineWidth = 12;
+      ctx.lineWidth = 3;
       ctx.strokeStyle = selected ? "#1a1408" : "#061018";
       ctx.strokeText(text, c, c + 4);
       ctx.fillStyle = selected ? "#1a1408" : "#ffffff";
@@ -621,6 +625,10 @@ export class SpaceView {
     this.time += dt;
     this.pulse += dt;
     this.aimCannons();
+    if (this.starTex) {
+      // Positive vOffset walks the field down the screen, toward the station.
+      this.starTex.vOffset = (this.starTex.vOffset + dt * 0.006) % 1;
+    }
     if (this.stationShield) {
       this.stationShield.scaling.y = 1 + Math.sin(this.pulse * 2.4) * 0.05;
       this.stationShield.isVisible = shieldCharges > 0;
@@ -634,19 +642,21 @@ export class SpaceView {
     const rect = canvas.getBoundingClientRect();
     const x = ((clientX - rect.left) / rect.width) * canvas.width;
     const y = ((clientY - rect.top) / rect.height) * canvas.height;
-    const pick = this.scene.pick(x, y, (m) => {
-      let node: { name?: string; parent?: unknown } | null = m;
-      while (node) {
-        if (typeof node.name === "string" && node.name.startsWith("body-")) return true;
-        node = (node.parent as { name?: string; parent?: unknown } | null) ?? null;
-      }
-      return false;
-    });
+    const pick = this.scene.pick(x, y, (m) => this.bodyIdOf(m) !== null);
     if (!pick?.hit || !pick.pickedMesh) return null;
-    let node: { name?: string; parent?: unknown } | null = pick.pickedMesh;
-    while (node) {
-      if (typeof node.name === "string" && node.name.startsWith("body-")) return node.name.slice(5);
-      node = (node.parent as { name?: string; parent?: unknown } | null) ?? null;
+    return this.bodyIdOf(pick.pickedMesh);
+  }
+
+  /** Rock mesh or its number badge. The badge is not parented to the tumbling mesh. */
+  private bodyIdOf(node: { name?: string; parent?: unknown } | null): string | null {
+    let current = node;
+    while (current) {
+      const name = current.name;
+      if (typeof name === "string") {
+        if (name.startsWith("body-")) return name.slice(5);
+        if (name.startsWith("label-")) return name.slice(6);
+      }
+      current = (current.parent as { name?: string; parent?: unknown } | null) ?? null;
     }
     return null;
   }
