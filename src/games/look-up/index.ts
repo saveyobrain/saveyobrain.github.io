@@ -25,16 +25,20 @@ import {
 } from "./math";
 import {
   IMPACT_Y,
-  PLAYFIELD_HALF,
-  SPAWN_Y,
-  SPAWN_Y_MAX,
   SpaceView,
-  randomLaneXs,
+  pickApproachSpawn,
   spawnAbove,
+  splitRingOffsets,
   type BodyVisual,
   type ShotVisual,
 } from "./render";
-import { shouldSpawnBonus, spawnValues, startingLives, waveConfig } from "./waves";
+import {
+  shouldSpawnBonus,
+  spawnValues,
+  startingLives,
+  waveConfig,
+  type WaveConfig,
+} from "./waves";
 
 const GAME_ID = "look-up";
 const CHOICE_COUNT = 4;
@@ -51,10 +55,14 @@ interface Body {
   x: number;
   y: number;
   z: number;
+  /** Deck aim X — drifts toward (targetX, IMPACT_Y). */
+  targetX: number;
   speed: number;
   burning: boolean;
   burnTimer: number;
   hitFlash: number;
+  /** Counts against wave concurrent cap (false for split shards). */
+  inbound: boolean;
 }
 
 interface Shot {
@@ -113,6 +121,10 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   let nextId = 1;
   let waveClearTimer = 0;
   let time = 0;
+  let activeCfg: WaveConfig = waveConfig(1, difficulty);
+  let pendingLabels: number[] = [];
+  let pendingBonus = false;
+  let spawnCooldown = 0;
 
   const hud = createLookUpHud(() => togglePause());
   stage.append(hud.el);
@@ -142,15 +154,89 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     return bodies.filter((b) => b.kind === "asteroid" && !b.burning);
   }
 
+  function distToImpact(b: Body): number {
+    const dx = b.targetX - b.x;
+    const dy = IMPACT_Y - b.y;
+    return Math.hypot(dx, dy);
+  }
+
   function pickDefaultTarget(): void {
     const threats = activeThreats();
     if (threats.length === 0) {
       selectedId = null;
       return;
     }
-    // Prefer the rock closest to impact (lowest Y toward the station deck).
-    threats.sort((a, b) => a.y - b.y || Math.abs(a.x) - Math.abs(b.x));
+    // Prefer the rock closest to impact along its approach path.
+    threats.sort((a, b) => distToImpact(a) - distToImpact(b) || a.y - b.y);
     selectedId = threats[0].id;
+  }
+
+  function inboundAlive(): number {
+    return bodies.filter((b) => b.kind === "asteroid" && b.inbound && !b.burning).length;
+  }
+
+  function releaseInbound(label: number): void {
+    const p = pickApproachSpawn(rng);
+    bodies.push({
+      id: String(nextId++),
+      kind: "asteroid",
+      label,
+      x: p.x,
+      y: p.y,
+      z: p.z,
+      targetX: p.targetX,
+      speed: activeCfg.speed * (0.92 + rng.next() * 0.16),
+      burning: false,
+      burnTimer: 0,
+      hitFlash: 0,
+      inbound: true,
+    });
+  }
+
+  function releaseBonus(): void {
+    const p = pickApproachSpawn(rng);
+    bodies.push({
+      id: String(nextId++),
+      kind: "bonus",
+      label: 0,
+      x: p.x,
+      y: Math.max(p.y, 6),
+      z: p.z,
+      targetX: p.targetX * 0.5,
+      speed: activeCfg.speed * 0.8,
+      burning: false,
+      burnTimer: 0,
+      hitFlash: 0,
+      inbound: false,
+    });
+  }
+
+  /** True when another inbound may enter (serial = wait for clear; else under cap + gap). */
+  function canReleaseInbound(): boolean {
+    const live = inboundAlive();
+    if (live >= activeCfg.maxConcurrent) return false;
+    if (activeCfg.maxConcurrent <= 1) return live === 0;
+    return spawnCooldown <= 0;
+  }
+
+  function tryReleaseFromQueue(): void {
+    if (pendingLabels.length > 0) {
+      if (!canReleaseInbound()) return;
+      const label = pendingLabels.shift();
+      if (label === undefined) return;
+      releaseInbound(label);
+      spawnCooldown = activeCfg.maxConcurrent <= 1 ? 0 : activeCfg.spawnGap;
+      if (!selectedId) {
+        pickDefaultTarget();
+        showTaskForSelection();
+      }
+      return;
+    }
+    if (pendingBonus && spawnCooldown <= 0) {
+      pendingBonus = false;
+      releaseBonus();
+      spawnCooldown = activeCfg.spawnGap;
+    }
   }
 
   function selectedBody(): Body | undefined {
@@ -180,47 +266,15 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function spawnWave(): void {
-    const cfg = waveConfig(wave, difficulty);
+    activeCfg = waveConfig(wave, difficulty);
     bodies = [];
     shots = [];
     selectedId = null;
-    const values = rng.shuffle(spawnValues(cfg, rng));
-    // Random X picks (shuffled), not a left→right sweep. Heights shuffled separately.
-    const xs = randomLaneXs(values.length, rng);
-    const heightRanks = rng.shuffle(Array.from({ length: values.length }, (_, i) => i));
-    values.forEach((label, i) => {
-      const t = values.length <= 1 ? 0.5 : heightRanks[i] / (values.length - 1);
-      const height = SPAWN_Y + t * (SPAWN_Y_MAX - SPAWN_Y) + (rng.next() - 0.5) * 0.45;
-      const p = spawnAbove(xs[i], height, (rng.next() - 0.5) * 0.35);
-      bodies.push({
-        id: String(nextId++),
-        kind: "asteroid",
-        label,
-        x: p.x,
-        y: p.y,
-        z: p.z,
-        speed: cfg.speed * (0.92 + rng.next() * 0.16),
-        burning: false,
-        burnTimer: 0,
-        hitFlash: 0,
-      });
-    });
-    if (shouldSpawnBonus(cfg, rng)) {
-      const x = (rng.next() * 2 - 1) * (PLAYFIELD_HALF - 1.2);
-      const p = spawnAbove(x, SPAWN_Y + (SPAWN_Y_MAX - SPAWN_Y) * 0.7, 0);
-      bodies.push({
-        id: String(nextId++),
-        kind: "bonus",
-        label: 0,
-        x: p.x,
-        y: p.y,
-        z: p.z,
-        speed: cfg.speed * 0.8,
-        burning: false,
-        burnTimer: 0,
-        hitFlash: 0,
-      });
-    }
+    pendingLabels = rng.shuffle(spawnValues(activeCfg, rng));
+    pendingBonus = shouldSpawnBonus(activeCfg, rng);
+    spawnCooldown = 0;
+    // Release the first inbound immediately so play starts with something on screen.
+    tryReleaseFromQueue();
     pickDefaultTarget();
     showTaskForSelection();
     syncHud();
@@ -343,13 +397,18 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     if (correct && result.ok) {
       fireShot(body, true);
       score += splitScore(body.label, pick);
-      // Replace the hit body with children spreading sideways while still falling.
+      // Replace the hit body with children on a spaced ring around the parent.
       body.burning = true;
       body.burnTimer = BURN_LIFE * 0.35;
       const children = result.children;
+      const ring = splitRingOffsets(children.length, rng, 2.15);
       children.forEach((label, i) => {
-        const spread = (i - (children.length - 1) / 2) * 1.05;
-        const p = spawnAbove(body.x + spread, Math.max(IMPACT_Y + 1.4, body.y - 0.35), body.z);
+        const off = ring[i] ?? { dx: 0, dy: 0.4, dz: 0 };
+        const p = spawnAbove(
+          body.x + off.dx,
+          Math.max(IMPACT_Y + 1.6, body.y + off.dy),
+          body.z + off.dz,
+        );
         const child: Body = {
           id: String(nextId++),
           kind: "asteroid",
@@ -357,10 +416,12 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
           x: p.x,
           y: p.y,
           z: p.z,
+          targetX: body.targetX + off.dx * 0.35,
           speed: body.speed * 1.02,
           burning: burnsHarmlessly(label),
           burnTimer: burnsHarmlessly(label) ? BURN_LIFE : 0,
           hitFlash: 0.6,
+          inbound: false,
         };
         if (child.burning) score += burnScore(label);
         bodies.push(child);
@@ -480,7 +541,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       case "move": {
         if (state !== "playing") break;
         // Cycle among threats sorted by closeness to the station (lowest Y first).
-        const threats = activeThreats().sort((a, b) => a.y - b.y || a.x - b.x);
+        const threats = activeThreats().sort((a, b) => distToImpact(a) - distToImpact(b) || a.y - b.y);
         if (threats.length === 0) break;
         const idx = Math.max(0, threats.findIndex((b) => b.id === selectedId));
         const next =
@@ -501,20 +562,24 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         body.burnTimer -= dt;
         continue;
       }
-      if (body.y <= IMPACT_Y) {
+      const dx = body.targetX - body.x;
+      const dy = IMPACT_Y - body.y;
+      const dist = Math.hypot(dx, dy);
+      if (body.y <= IMPACT_Y + 0.04 || dist < 0.2) {
         impact(body);
         continue;
       }
-      body.y -= Math.min(body.speed * dt, body.y - IMPACT_Y + 0.01);
+      const step = Math.min(body.speed * dt, dist);
+      body.x += (dx / dist) * step;
+      body.y += (dy / dist) * step;
+      body.z *= 0.985;
     }
     bodies = bodies.filter((b) => !(b.burning && b.burnTimer <= 0));
-    // Keep auto-target locked to the closest threat as rocks fall.
-    const closest = activeThreats().sort((a, b) => a.y - b.y || Math.abs(a.x) - Math.abs(b.x))[0];
+    // Keep auto-target locked to the closest threat as rocks approach.
+    const closest = activeThreats().sort((a, b) => distToImpact(a) - distToImpact(b) || a.y - b.y)[0];
     if (closest && selectedId !== closest.id && feedbackTimer <= 0) {
-      // Only auto-retarget if the player hasn't manually picked something still alive,
-      // or the previous selection is gone / farther from impact than the new closest.
       const current = selectedBody();
-      if (!current || current.y > closest.y + 0.05) {
+      if (!current || distToImpact(current) > distToImpact(closest) + 0.05) {
         selectedId = closest.id;
         showTaskForSelection();
       }
@@ -527,6 +592,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   function update(dt: number): void {
     time += dt;
     if (state === "playing") {
+      if (spawnCooldown > 0) spawnCooldown -= dt;
+      tryReleaseFromQueue();
       if (feedbackTimer > 0) {
         feedbackTimer -= dt;
         if (feedbackTimer <= 0) {
@@ -538,8 +605,12 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       for (const shot of shots) shot.life -= dt;
       shots = shots.filter((s) => s.life > 0);
 
-      if (activeThreats().length === 0 && bodies.every((b) => b.kind !== "asteroid" || b.burning)) {
-        // Wait for burn FX, then clear.
+      const queueEmpty = pendingLabels.length === 0 && !pendingBonus;
+      if (
+        queueEmpty &&
+        activeThreats().length === 0 &&
+        bodies.every((b) => b.kind !== "asteroid" || b.burning)
+      ) {
         if (bodies.filter((b) => b.kind === "asteroid").length === 0) {
           waveClearTimer += dt;
           if (waveClearTimer > 0.35) {

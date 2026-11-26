@@ -548,26 +548,92 @@ export function spawnAbove(laneX: number, height: number, depth = 0): { x: numbe
   };
 }
 
+export interface ApproachSpawn {
+  x: number;
+  y: number;
+  z: number;
+  /** Deck aim point — rock drifts toward (targetX, IMPACT_Y). */
+  targetX: number;
+}
+
+type ApproachKind = "top" | "topLeft" | "topRight" | "left" | "right" | "cornerL" | "cornerR";
+
 /**
- * Random X positions across the playfield (not a left→right sweep).
- * Uses rejection sampling so rocks stay spaced; falls back to shuffled even lanes.
+ * Pick a spawn on the rim (top / sides / corners) so approaches aren't stacked
+ * above center. Always aims toward a point on the station deck.
  */
-export function randomLaneXs(count: number, rng: { next(): number; shuffle<T>(items: T[]): T[] }): number[] {
+export function pickApproachSpawn(rng: { next(): number; pick<T>(items: readonly T[]): T }): ApproachSpawn {
+  const kind = rng.pick<ApproachKind>(["top", "topLeft", "topRight", "left", "right", "cornerL", "cornerR"]);
+  const targetX = (rng.next() * 2 - 1) * (PLAYFIELD_HALF * 0.55);
+  const z = (rng.next() - 0.5) * 0.5;
+  switch (kind) {
+    case "top":
+      return {
+        x: (rng.next() * 2 - 1) * (PLAYFIELD_HALF - 0.6),
+        y: SPAWN_Y + rng.next() * (SPAWN_Y_MAX - SPAWN_Y),
+        z,
+        targetX,
+      };
+    case "topLeft":
+      return {
+        x: -PLAYFIELD_HALF + 0.3 + rng.next() * 1.4,
+        y: SPAWN_Y_MAX - rng.next() * 1.2,
+        z,
+        targetX: Math.min(targetX, -0.4),
+      };
+    case "topRight":
+      return {
+        x: PLAYFIELD_HALF - 0.3 - rng.next() * 1.4,
+        y: SPAWN_Y_MAX - rng.next() * 1.2,
+        z,
+        targetX: Math.max(targetX, 0.4),
+      };
+    case "left":
+      return {
+        x: -PLAYFIELD_HALF - 0.2 - rng.next() * 0.8,
+        y: 4.5 + rng.next() * 7.5,
+        z: (rng.next() - 0.5) * 0.7,
+        targetX: Math.min(targetX, 0.8),
+      };
+    case "right":
+      return {
+        x: PLAYFIELD_HALF + 0.2 + rng.next() * 0.8,
+        y: 4.5 + rng.next() * 7.5,
+        z: (rng.next() - 0.5) * 0.7,
+        targetX: Math.max(targetX, -0.8),
+      };
+    case "cornerL":
+      return {
+        x: -PLAYFIELD_HALF - 0.4 - rng.next() * 0.6,
+        y: SPAWN_Y + rng.next() * 2.2,
+        z: -0.2 - rng.next() * 0.5,
+        targetX: Math.min(targetX, 0),
+      };
+    case "cornerR":
+      return {
+        x: PLAYFIELD_HALF + 0.4 + rng.next() * 0.6,
+        y: SPAWN_Y + rng.next() * 2.2,
+        z: -0.2 - rng.next() * 0.5,
+        targetX: Math.max(targetX, 0),
+      };
+  }
+}
+
+/** Place split shards on a circle around the parent with generous spacing. */
+export function splitRingOffsets(
+  count: number,
+  rng: { next(): number },
+  radius = 1.85,
+): { dx: number; dy: number; dz: number }[] {
   const n = Math.max(1, count);
-  const margin = 0.9;
-  const span = PLAYFIELD_HALF - margin;
-  const minGap = Math.min(1.35, (2 * span) / Math.max(n, 1) * 0.55);
-  const xs: number[] = [];
-  for (let attempt = 0; attempt < n * 40 && xs.length < n; attempt++) {
-    const x = (rng.next() * 2 - 1) * span;
-    if (xs.every((other) => Math.abs(other - x) >= minGap)) xs.push(x);
-  }
-  if (xs.length < n) {
-    const fallback = Array.from({ length: n }, (_, i) => {
-      const t = (i + 0.5) / n;
-      return -span + t * (2 * span);
-    });
-    return rng.shuffle(fallback);
-  }
-  return rng.shuffle(xs);
+  const base = rng.next() * Math.PI * 2;
+  return Array.from({ length: n }, (_, i) => {
+    const ang = base + (i * Math.PI * 2) / n + (rng.next() - 0.5) * 0.35;
+    const r = radius * (0.85 + rng.next() * 0.35);
+    return {
+      dx: Math.cos(ang) * r,
+      dy: Math.sin(ang) * r * 0.55,
+      dz: Math.sin(ang * 1.3) * 0.25,
+    };
+  });
 }

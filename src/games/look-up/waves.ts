@@ -8,10 +8,17 @@ export interface WaveConfig {
   count: number;
   minValue: number;
   maxValue: number;
-  /** Units per second falling toward the station (world Y). */
+  /** Units per second toward the station. */
   speed: number;
   /** Chance (0..1) to include a shield bonus target in the wave. */
   bonusChance: number;
+  /**
+   * Max live inbound asteroids (not counting split fragments mid-clear).
+   * Easy/Normal low waves = 1 (serial); harder / later = more, still capped.
+   */
+  maxConcurrent: number;
+  /** Seconds to wait between releasing another inbound when under the concurrent cap. */
+  spawnGap: number;
 }
 
 const DIFF_SCALE: Record<Exclude<Difficulty, "custom">, { speed: number; size: number; lives: number }> = {
@@ -26,6 +33,41 @@ export function startingLives(difficulty: Difficulty): number {
   return DIFF_SCALE[difficulty].lives;
 }
 
+/** Concurrent inbound cap — serial early on Easy/Normal; ramps later / on hard modes. */
+export function maxConcurrent(wave: number, difficulty: Difficulty): number {
+  const w = Math.max(1, Math.floor(wave));
+  const d = difficulty === "custom" ? "normal" : difficulty;
+  if (d === "easy") {
+    if (w <= 4) return 1;
+    if (w <= 8) return 2;
+    return 3;
+  }
+  if (d === "normal") {
+    if (w <= 3) return 1;
+    if (w <= 7) return 2;
+    return 3;
+  }
+  if (d === "hard") {
+    if (w <= 2) return 2;
+    if (w <= 5) return 3;
+    return 4;
+  }
+  // hardcore
+  if (w <= 2) return 2;
+  if (w <= 4) return 3;
+  return Math.min(5, 3 + Math.floor((w - 4) / 3));
+}
+
+/** Gap between releases when concurrent > 1 (serial mode ignores this and waits for a clear). */
+export function spawnGapSeconds(wave: number, difficulty: Difficulty): number {
+  const w = Math.max(1, Math.floor(wave));
+  const d = difficulty === "custom" ? "normal" : difficulty;
+  if (d === "easy") return Math.max(0.9, 1.6 - w * 0.05);
+  if (d === "normal") return Math.max(0.7, 1.35 - w * 0.05);
+  if (d === "hard") return Math.max(0.45, 1.0 - w * 0.04);
+  return Math.max(0.35, 0.85 - w * 0.04);
+}
+
 export function waveConfig(wave: number, difficulty: Difficulty): WaveConfig {
   const w = Math.max(1, Math.floor(wave));
   const scale = difficulty === "custom" ? DIFF_SCALE.normal : DIFF_SCALE[difficulty];
@@ -33,10 +75,18 @@ export function waveConfig(wave: number, difficulty: Difficulty): WaveConfig {
   const maxValue = Math.min(10 + Math.floor(w * 4 * scale.size), 120);
   const count = Math.min(3 + Math.floor((w - 1) * 0.6), 8);
   // Slow early waves, but fast enough that motion is obvious within a few seconds.
-  // Wave 1 normal ≈ 0.22 u/s → ~45s from top of frame to the deck.
   const speed = (0.22 + (w - 1) * 0.035) * scale.speed;
   const bonusChance = w >= 2 ? Math.min(0.15 + w * 0.03, 0.45) : 0;
-  return { wave: w, count, minValue, maxValue, speed, bonusChance };
+  return {
+    wave: w,
+    count,
+    minValue,
+    maxValue,
+    speed,
+    bonusChance,
+    maxConcurrent: maxConcurrent(w, difficulty),
+    spawnGap: spawnGapSeconds(w, difficulty),
+  };
 }
 
 export function spawnValues(cfg: WaveConfig, rng: Rng): number[] {
