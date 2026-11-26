@@ -79,9 +79,6 @@ export const OFFSCREEN_Y = 15.2;
 /** Past the left/right edges of the framed play column. */
 export const OFFSCREEN_X = 8.6;
 
-/** Hardpoint X on the cropped deck plates (empty circular ports). */
-const CANNON_X = [-2.15, 2.15] as const;
-
 function litMat(scene: Scene, name: string, diffuse: Color3, emissive: Color3, specular = 0.35): StandardMaterial {
   const m = new StandardMaterial(name, scene);
   m.diffuseColor = diffuse;
@@ -132,14 +129,27 @@ function rockPalette(seed: number): { diffuse: Color3; emissive: Color3 } {
   return { diffuse: new Color3(0.52, 0.42, 0.3), emissive: new Color3(0.09, 0.06, 0.04) };
 }
 
-function spriteMat(scene: Scene, name: string, url: string, hasAlpha: boolean): StandardMaterial {
-  const tex = new Texture(url, scene, true, true, Texture.TRILINEAR_SAMPLINGMODE);
+/** Shared GPU textures — left/right turrets reuse the same Texture instances. */
+const artTexCache = new Map<string, Texture>();
+
+function artTexture(scene: Scene, url: string, hasAlpha: boolean): Texture {
+  const hit = artTexCache.get(url);
+  if (hit) return hit;
+  const tex = new Texture(url, scene, true, true, Texture.BILINEAR_SAMPLINGMODE);
   tex.hasAlpha = hasAlpha;
   tex.wrapU = Texture.CLAMP_ADDRESSMODE;
   tex.wrapV = Texture.CLAMP_ADDRESSMODE;
+  tex.anisotropicFilteringLevel = 1;
+  artTexCache.set(url, tex);
+  return tex;
+}
+
+function spriteMat(scene: Scene, name: string, url: string, hasAlpha: boolean): StandardMaterial {
+  const tex = artTexture(scene, url, hasAlpha);
   const m = new StandardMaterial(name, scene);
   m.diffuseTexture = tex;
   m.emissiveTexture = tex;
+  m.emissiveColor = Color3.White();
   m.opacityTexture = hasAlpha ? tex : null;
   m.useAlphaFromDiffuseTexture = hasAlpha;
   m.transparencyMode = hasAlpha ? Material.MATERIAL_ALPHABLEND : Material.MATERIAL_OPAQUE;
@@ -154,6 +164,8 @@ function planeUvToLocal(u: number, v: number, width: number, height: number): Ve
   return new Vector3((u - 0.5) * width, (0.5 - v) * height, 0);
 }
 
+const DECK_WORLD_W = 14.8;
+
 /** Front-facing space view: painted deck billboard + layered PNG turrets that aim. */
 export class SpaceView {
   readonly camera: TargetCamera;
@@ -162,6 +174,7 @@ export class SpaceView {
   private readonly cannons: CannonRig[] = [];
   private stationShield: Mesh | null = null;
   private stationRoot: TransformNode | null = null;
+  private deckMat: StandardMaterial | null = null;
   private tier: StationTier = 1;
   private time = 0;
   private pulse = 0;
@@ -194,73 +207,129 @@ export class SpaceView {
   /** Visual tier swap (upgrade economy can call this; waves stub it for now). */
   setStationTier(tier: StationTier): void {
     if (tier === this.tier && this.cannons.length) return;
+    const prev = this.tier;
     this.tier = tier;
-    this.rebuildStationArt();
+    if (!this.cannons.length || !this.deckMat) {
+      this.buildStation(TIER_KITS[tier]);
+      return;
+    }
+    // In-place texture swap — avoid dispose/rebuild thrash at wave boundaries.
+    if (prev !== tier) this.applyTierTextures(TIER_KITS[tier]);
   }
 
   getStationTier(): StationTier {
     return this.tier;
   }
 
-  private rebuildStationArt(): void {
-    // Turrets / deck / shield are parented under stationRoot.
-    this.stationRoot?.dispose();
-    this.cannons.length = 0;
-    this.stationRoot = null;
-    this.stationShield = null;
-    this.buildStation(TIER_KITS[this.tier]);
+  private applyTierTextures(kit: TierArtKit): void {
+    if (this.deckMat) {
+      const deckTex = artTexture(this.scene, kit.deck, false);
+      this.deckMat.diffuseTexture = deckTex;
+      this.deckMat.emissiveTexture = deckTex;
+    }
+    for (const rig of this.cannons) {
+      const baseMat = rig.basePlane.material as StandardMaterial;
+      const barrelMat = rig.barrelPlane.material as StandardMaterial;
+      const baseTex = artTexture(this.scene, kit.basePivot, true);
+      const barrelTex = artTexture(this.scene, kit.barrel, true);
+      baseMat.diffuseTexture = baseTex;
+      baseMat.emissiveTexture = baseTex;
+      baseMat.opacityTexture = baseTex;
+      barrelMat.diffuseTexture = barrelTex;
+      barrelMat.emissiveTexture = barrelTex;
+      barrelMat.opacityTexture = barrelTex;
+      this.layoutTurretLayers(rig, kit);
+    }
+  }
+
+  private layoutTurretLayers(rig: CannonRig, kit: TierArtKit): void {
+    const size = kit.turretSize;
+    const meta = (rig.basePlane.metadata as { builtSize?: number; turretSize?: number } | null) ?? {};
+    const built = meta.builtSize ?? size;
+    const s = size / built;
+    rig.basePlane.scaling.set(s, s, s);
+    rig.barrelPlane.scaling.set(s, s, s);
+    const cradle = planeUvToLocal(kit.baseHingeU, kit.baseHingeV, size, size);
+    const hingeLocal = planeUvToLocal(kit.hingeU, kit.hingeV, size, size);
+    const tipLocal = planeUvToLocal(kit.tipU, kit.tipV, size, size);
+    rig.hinge.position.set(cradle.x, cradle.y, -0.04);
+    rig.barrelPlane.position.set(-hingeLocal.x, -hingeLocal.y, 0);
+    rig.muzzleLocal = tipLocal.subtract(hingeLocal);
+    rig.basePlane.metadata = { ...meta, turretSize: size, builtSize: built };
+    rig.barrelPlane.metadata = { turretSize: size, builtSize: built };
   }
 
   private buildStation(kit: TierArtKit): void {
+    // Clear any prior station (first build or recovery).
+    this.stationRoot?.dispose();
+    this.cannons.length = 0;
+    this.stationRoot = null;
+    this.deckMat = null;
+    this.stationShield = null;
+
     const root = new TransformNode("stationRoot", this.scene);
     this.stationRoot = root;
+    // Hide until textures decode so start doesn't flash oversized/untextured planes.
+    root.setEnabled(false);
 
     // Dark under-hull so the deck billboard has a solid silhouette edge.
-    const hull = CreateBox("stationHull", { width: 13.8, height: 1.8, depth: 2.6 }, this.scene);
+    const hull = CreateBox("stationHull", { width: 13.2, height: 1.6, depth: 2.4 }, this.scene);
     hull.parent = root;
-    hull.position = new Vector3(0, -0.65, 0.7);
+    hull.position = new Vector3(0, -0.55, 0.65);
     hull.material = litMat(this.scene, "hullMat", new Color3(0.08, 0.12, 0.18), new Color3(0.02, 0.04, 0.07), 0.15);
 
-    // Pre-cropped deck plate (cyan strips + hardpoint rings, no sky).
-    const deckW = 15.2;
-    const deckH = 5.8;
+    // Deck plate — world size matches image aspect so hardpoint UVs stay true.
+    const deckW = DECK_WORLD_W;
+    const deckH = deckW / kit.deckAspect;
     const deck = CreatePlane("stationDeckArt", { width: deckW, height: deckH }, this.scene);
     deck.parent = root;
-    deck.position = new Vector3(0, 1.85, 0.35);
-    deck.rotation.x = 0.18;
+    deck.position = new Vector3(0, 1.55, 0.4);
+    deck.rotation.x = 0.16;
     const deckMat = spriteMat(this.scene, "deckArtMat", kit.deck, false);
-    deckMat.emissiveColor = new Color3(0.55, 0.6, 0.7);
     deck.material = deckMat;
+    this.deckMat = deckMat;
 
-    for (let i = 0; i < CANNON_X.length; i++) {
-      this.buildArtCannon(i, CANNON_X[i], kit, root);
+    for (let i = 0; i < kit.hardpoints.length; i++) {
+      this.buildArtCannon(i, kit.hardpoints[i], kit, deck, deckW, deckH);
     }
 
-    const shield = CreateBox("shieldHint", { width: 12.2, height: 0.7, depth: 2.4 }, this.scene);
+    const shield = CreateBox("shieldHint", { width: 12.2, height: 0.55, depth: 2.2 }, this.scene);
     shield.parent = root;
-    shield.position = new Vector3(0, IMPACT_Y + 0.1, 0.05);
+    shield.position = new Vector3(0, IMPACT_Y + 0.05, 0.05);
     const shieldMat = new StandardMaterial("shieldMat", this.scene);
     shieldMat.emissiveColor = new Color3(0.15, 0.85, 0.65);
-    shieldMat.alpha = 0.16;
+    shieldMat.alpha = 0.14;
     shieldMat.wireframe = true;
     shieldMat.disableLighting = true;
     shield.material = shieldMat;
     this.stationShield = shield;
+
+    const pending = [kit.deck, kit.basePivot, kit.barrel].map((url) => artTexture(this.scene, url, url.endsWith(".png")));
+    Texture.WhenAllReady(pending, () => {
+      if (this.stationRoot === root) root.setEnabled(true);
+    });
   }
 
   /**
-   * Layered PNG turret: base-pivot fixed on hardpoint (optional yaw),
-   * barrel overlays and pitches about the rear hinge.
+   * Layered PNG turret: UV-locked to a deck hardpoint; base fixed, barrel pitches
+   * about the cradle hinge.
    */
-  private buildArtCannon(i: number, x: number, kit: TierArtKit, parent: TransformNode): void {
+  private buildArtCannon(
+    i: number,
+    hp: { u: number; v: number },
+    kit: TierArtKit,
+    deck: Mesh,
+    deckW: number,
+    deckH: number,
+  ): void {
     const size = kit.turretSize;
-    const flip = x < 0 ? -1 : 1;
+    const flip = hp.u < 0.5 ? -1 : 1;
+    const local = planeUvToLocal(hp.u, hp.v, deckW, deckH);
 
     const root = new TransformNode(`turretRoot-${i}`, this.scene);
-    root.parent = parent;
-    // Sit on the deck plate hardpoint rings, slightly toward camera.
-    root.position = new Vector3(x, STATION_DECK_Y + 1.35, -0.85);
-    // Mirror the left hardpoint so painted barrels lean outward/up.
+    root.parent = deck;
+    // Sit on the hardpoint ring, slightly toward camera (local −Z on the plate).
+    root.position = new Vector3(local.x, local.y, -0.05);
     root.scaling.x = flip;
 
     const yaw = new TransformNode(`turretYaw-${i}`, this.scene);
@@ -271,6 +340,7 @@ export class SpaceView {
     base.position = new Vector3(0, 0, 0);
     base.renderingGroupId = 1;
     base.material = spriteMat(this.scene, `turretBaseMat-${i}`, kit.basePivot, true);
+    base.metadata = { turretSize: size, builtSize: size };
 
     const cradle = planeUvToLocal(kit.baseHingeU, kit.baseHingeV, size, size);
     const hingeLocal = planeUvToLocal(kit.hingeU, kit.hingeV, size, size);
@@ -278,34 +348,42 @@ export class SpaceView {
 
     const hinge = new TransformNode(`turretHinge-${i}`, this.scene);
     hinge.parent = yaw;
-    // Sit the hinge in the base cradle holes, not on the front of the disc.
-    hinge.position = new Vector3(cradle.x, cradle.y, -0.06);
+    hinge.position = new Vector3(cradle.x, cradle.y, -0.04);
 
     const barrel = CreatePlane(`turretBarrel-${i}`, { width: size, height: size }, this.scene);
     barrel.parent = hinge;
-    // Offset so the barrel's rear-hinge UV lands on the cradle hinge.
     barrel.position = new Vector3(-hingeLocal.x, -hingeLocal.y, 0);
     barrel.renderingGroupId = 2;
     barrel.material = spriteMat(this.scene, `turretBarrelMat-${i}`, kit.barrel, true);
+    barrel.metadata = { turretSize: size, builtSize: size };
 
     const muzzleLocal = tipLocal.subtract(hingeLocal);
-
-    this.cannons.push({ x, flip, root, yaw, hinge, basePlane: base, barrelPlane: barrel, muzzleLocal });
+    // World X for muzzle pick — deck-local hardpoint X is enough for nearest-cannon.
+    this.cannons.push({
+      x: local.x,
+      flip,
+      root,
+      yaw,
+      hinge,
+      basePlane: base,
+      barrelPlane: barrel,
+      muzzleLocal,
+    });
   }
 
   private buildStars(): Mesh {
     const plane = CreatePlane("stars", { width: 38, height: 28 }, this.scene);
     plane.position = new Vector3(0, 7.5, 6);
-    const tex = new DynamicTexture("starTex", { width: 1024, height: 1024 }, this.scene, false);
+    const tex = new DynamicTexture("starTex", { width: 512, height: 512 }, this.scene, false);
     tex.updateSamplingMode(Texture.NEAREST_NEAREST);
     tex.wrapU = Texture.CLAMP_ADDRESSMODE;
     tex.wrapV = Texture.CLAMP_ADDRESSMODE;
     const ctx = tex.getContext() as unknown as CanvasRenderingContext2D;
     ctx.fillStyle = "#03060f";
-    ctx.fillRect(0, 0, 1024, 1024);
-    for (let i = 0; i < 320; i++) {
-      const x = Math.floor(Math.random() * 1024);
-      const y = Math.floor(Math.random() * 1024);
+    ctx.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 220; i++) {
+      const x = Math.floor(Math.random() * 512);
+      const y = Math.floor(Math.random() * 512);
       const bright = 180 + Math.floor(Math.random() * 75);
       const size = Math.random() < 0.12 ? 2 : 1;
       ctx.fillStyle = `rgb(${bright},${bright},${Math.min(255, bright + 20)})`;
