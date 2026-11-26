@@ -29,6 +29,7 @@ import {
   SPAWN_Y,
   SPAWN_Y_MAX,
   SpaceView,
+  lanePositions,
   spawnAbove,
   type BodyVisual,
   type ShotVisual,
@@ -184,13 +185,13 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     shots = [];
     selectedId = null;
     const values = spawnValues(cfg, rng);
+    // Distinct columns across the screen (shuffled), staggered in Y so they aren't one row.
+    const lanes = rng.shuffle(lanePositions(values.length));
     values.forEach((label, i) => {
-      // Spread across lanes; keep every rock inside the camera frame at spawn.
-      const lane = ((i + 0.5) / values.length) * 2 - 1;
-      const x = lane * (PLAYFIELD_HALF - 0.9) + (rng.next() - 0.5) * 0.6;
-      const t = values.length <= 1 ? 0 : i / (values.length - 1);
-      const height = SPAWN_Y + t * (SPAWN_Y_MAX - SPAWN_Y) + (rng.next() - 0.5) * 0.35;
-      const p = spawnAbove(x, height, (rng.next() - 0.5) * 0.25);
+      const x = lanes[i] + (rng.next() - 0.5) * 0.35;
+      const t = values.length <= 1 ? 0.5 : i / (values.length - 1);
+      const height = SPAWN_Y + t * (SPAWN_Y_MAX - SPAWN_Y) + (rng.next() - 0.5) * 0.5;
+      const p = spawnAbove(x, height, (rng.next() - 0.5) * 0.35);
       bodies.push({
         id: String(nextId++),
         kind: "asteroid",
@@ -206,7 +207,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     });
     if (shouldSpawnBonus(cfg, rng)) {
       const x = (rng.next() * 2 - 1) * (PLAYFIELD_HALF - 1.2);
-      const p = spawnAbove(x, SPAWN_Y_MAX - 0.4, 0);
+      const p = spawnAbove(x, SPAWN_Y + (SPAWN_Y_MAX - SPAWN_Y) * 0.7, 0);
       bodies.push({
         id: String(nextId++),
         kind: "bonus",
@@ -573,6 +574,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       success: s.success,
     }));
     view.syncShots(shotVisuals);
+    const aim = selectedBody();
+    view.setAimTarget(aim ? { x: aim.x, y: aim.y, z: aim.z } : null);
     view.update(dt, shields);
   }
 
