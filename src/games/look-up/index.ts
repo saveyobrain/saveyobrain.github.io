@@ -23,6 +23,7 @@ import {
   splitDivisors,
   splitScore,
 } from "./math";
+import { tierForWave } from "./art";
 import {
   IMPACT_Y,
   SpaceView,
@@ -267,6 +268,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
 
   function spawnWave(): void {
     activeCfg = waveConfig(wave, difficulty);
+    // Stub upgrade path: swap deck/turret kits by wave until economy exists.
+    view.setStationTier(tierForWave(wave));
     bodies = [];
     shots = [];
     selectedId = null;

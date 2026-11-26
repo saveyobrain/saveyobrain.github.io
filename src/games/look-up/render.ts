@@ -5,17 +5,17 @@ import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
-import { CreateCylinder } from "@babylonjs/core/Meshes/Builders/cylinderBuilder";
-import { CreateDisc } from "@babylonjs/core/Meshes/Builders/discBuilder";
 import { CreateIcoSphere } from "@babylonjs/core/Meshes/Builders/icoSphereBuilder";
 import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
+import { Material } from "@babylonjs/core/Materials/material";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder";
+import { TIER_KITS, type StationTier, type TierArtKit } from "./art";
 
 export type BodyKind = "asteroid" | "bonus";
 
@@ -54,9 +54,18 @@ interface BodyMesh {
 
 interface CannonRig {
   x: number;
-  pivot: TransformNode;
-  barrel: Mesh;
-  muzzle: Mesh;
+  /** -1 for mirrored left hardpoint, +1 for right. */
+  flip: number;
+  /** Hardpoint on deck (base stays put). */
+  root: TransformNode;
+  /** Optional yaw of the base-pivot plate. */
+  yaw: TransformNode;
+  /** Pitch hinge at the barrel rear. */
+  hinge: TransformNode;
+  basePlane: Mesh;
+  barrelPlane: Mesh;
+  /** Muzzle tip in hinge-local space (rest pose). */
+  muzzleLocal: Vector3;
 }
 
 /** Half-width of the play lane (world X). */
@@ -70,21 +79,14 @@ export const OFFSCREEN_Y = 15.2;
 /** Past the left/right edges of the framed play column. */
 export const OFFSCREEN_X = 8.6;
 
-const CANNON_X = [-2.6, 2.6] as const;
-const BARREL_LEN = 1.05;
+/** Hardpoint X on the cropped deck plates (empty circular ports). */
+const CANNON_X = [-2.15, 2.15] as const;
 
 function litMat(scene: Scene, name: string, diffuse: Color3, emissive: Color3, specular = 0.35): StandardMaterial {
   const m = new StandardMaterial(name, scene);
   m.diffuseColor = diffuse;
   m.emissiveColor = emissive;
   m.specularColor = new Color3(specular, specular * 0.9, specular * 0.8);
-  return m;
-}
-
-function glowMat(scene: Scene, name: string, color: Color3): StandardMaterial {
-  const m = new StandardMaterial(name, scene);
-  m.emissiveColor = color;
-  m.disableLighting = true;
   return m;
 }
 
@@ -130,73 +132,46 @@ function rockPalette(seed: number): { diffuse: Color3; emissive: Color3 } {
   return { diffuse: new Color3(0.52, 0.42, 0.3), emissive: new Color3(0.09, 0.06, 0.04) };
 }
 
-/**
- * Same boxy slab proportions, but softens the camera-facing corners/edges:
- * larger front vertical fillets, a rounded front-top lip, and corner spheres.
- * Back stays mostly square so we don't redesign the station.
- */
-function softFrontSlab(
-  scene: Scene,
-  name: string,
-  width: number,
-  height: number,
-  depth: number,
-  position: Vector3,
-  frontR: number,
-  mat: StandardMaterial,
-): void {
-  const r = Math.min(frontR, width * 0.22, depth * 0.5, height * 0.85);
-  const core = CreateBox(`${name}Core`, { width: width - 2 * r, height, depth: depth - r * 0.35 }, scene);
-  core.position = new Vector3(position.x, position.y, position.z + r * 0.15);
-  core.material = mat;
-
-  // Front-left / front-right vertical fillets (the corners you actually see).
-  for (const sx of [-1, 1] as const) {
-    const post = CreateCylinder(`${name}FrontPost${sx}`, { height, diameter: r * 2 }, scene);
-    post.position = new Vector3(position.x + sx * (width / 2 - r), position.y, position.z - (depth / 2 - r));
-    post.material = mat;
-
-    // Milder rear posts so the slab isn't a razor table from an angle.
-    const rear = CreateCylinder(`${name}RearPost${sx}`, { height, diameter: r * 1.15 }, scene);
-    rear.position = new Vector3(position.x + sx * (width / 2 - r * 0.55), position.y, position.z + (depth / 2 - r * 0.55));
-    rear.material = mat;
-
-    const side = CreateBox(`${name}Side${sx}`, { width: r * 2, height, depth: depth - 2 * r }, scene);
-    side.position = new Vector3(position.x + sx * (width / 2 - r), position.y, position.z);
-    side.material = mat;
-  }
-
-  // Front-top lip: horizontal cylinder so the deck edge isn't a hard table cut.
-  const lip = CreateCylinder(`${name}FrontLip`, { height: width - 2 * r, diameter: Math.min(r * 1.35, height * 1.6) }, scene);
-  lip.rotation.z = Math.PI / 2;
-  lip.position = new Vector3(position.x, position.y + height / 2 - r * 0.15, position.z - (depth / 2 - r * 0.55));
-  lip.material = mat;
-
-  // Spherical blends at the two visible front-top corners.
-  for (const sx of [-1, 1] as const) {
-    const cap = CreateSphere(`${name}FrontCap${sx}`, { diameter: r * 1.7, segments: 14 }, scene);
-    cap.position = new Vector3(
-      position.x + sx * (width / 2 - r),
-      position.y + height / 2 - r * 0.2,
-      position.z - (depth / 2 - r),
-    );
-    cap.material = mat;
-  }
+function spriteMat(scene: Scene, name: string, url: string, hasAlpha: boolean): StandardMaterial {
+  const tex = new Texture(url, scene, true, true, Texture.TRILINEAR_SAMPLINGMODE);
+  tex.hasAlpha = hasAlpha;
+  tex.wrapU = Texture.CLAMP_ADDRESSMODE;
+  tex.wrapV = Texture.CLAMP_ADDRESSMODE;
+  const m = new StandardMaterial(name, scene);
+  m.diffuseTexture = tex;
+  m.emissiveTexture = tex;
+  m.opacityTexture = hasAlpha ? tex : null;
+  m.useAlphaFromDiffuseTexture = hasAlpha;
+  m.transparencyMode = hasAlpha ? Material.MATERIAL_ALPHABLEND : Material.MATERIAL_OPAQUE;
+  m.disableLighting = true;
+  m.backFaceCulling = false;
+  m.specularColor = Color3.Black();
+  return m;
 }
 
-/** Front-facing space view: prior boxy station (rounded corners) + aiming cannons. */
+/** UV on a CreatePlane (width×height) → local XY with image top at +Y when invertY. */
+function planeUvToLocal(u: number, v: number, width: number, height: number): Vector3 {
+  return new Vector3((u - 0.5) * width, (0.5 - v) * height, 0);
+}
+
+/** Front-facing space view: painted deck billboard + layered PNG turrets that aim. */
 export class SpaceView {
   readonly camera: TargetCamera;
   private readonly bodies = new Map<string, BodyMesh>();
   private readonly shots = new Map<string, Mesh>();
   private readonly cannons: CannonRig[] = [];
   private stationShield: Mesh | null = null;
+  private stationRoot: TransformNode | null = null;
+  private tier: StationTier = 1;
   private time = 0;
   private pulse = 0;
   private aimTarget: Vector3 | null = null;
 
   constructor(private readonly scene: Scene) {
     scene.clearColor = new Color4(0.015, 0.03, 0.07, 1);
+    // Keep depth when drawing turret layers above the deck plate.
+    scene.setRenderingAutoClearDepthStencil(1, false, false, false);
+    scene.setRenderingAutoClearDepthStencil(2, false, false, false);
 
     this.camera = new TargetCamera("cam", new Vector3(0, 6.4, -17.5), scene);
     this.camera.setTarget(new Vector3(0, 6.4, 0));
@@ -212,41 +187,57 @@ export class SpaceView {
     sun.intensity = 0.95;
     sun.diffuse = new Color3(0.85, 0.92, 1);
 
-    this.buildStation();
+    this.buildStation(TIER_KITS[this.tier]);
     this.buildStars();
   }
 
-  private buildStation(): void {
-    // Same boxy station — only soften the visible front corners / top lip.
-    const hullMat = litMat(this.scene, "hullMat", new Color3(0.22, 0.3, 0.4), new Color3(0.05, 0.09, 0.14));
-    softFrontSlab(this.scene, "stationHull", 13.5, 2.8, 2.6, new Vector3(0, -0.7, 0.4), 0.85, hullMat);
+  /** Visual tier swap (upgrade economy can call this; waves stub it for now). */
+  setStationTier(tier: StationTier): void {
+    if (tier === this.tier && this.cannons.length) return;
+    this.tier = tier;
+    this.rebuildStationArt();
+  }
 
-    const deckMat = litMat(this.scene, "deckMat", new Color3(0.4, 0.62, 0.78), new Color3(0.1, 0.22, 0.3));
-    softFrontSlab(this.scene, "stationDeck", 12, 0.28, 2.2, new Vector3(0, STATION_DECK_Y, 0.1), 0.7, deckMat);
+  getStationTier(): StationTier {
+    return this.tier;
+  }
 
-    for (let i = -4; i <= 4; i++) {
-      const seam = CreateBox(`seam-${i}`, { width: 0.08, height: 0.06, depth: 1.9 }, this.scene);
-      seam.position = new Vector3(i * 1.25, STATION_DECK_Y + 0.18, 0.05);
-      seam.material = glowMat(this.scene, `seamMat-${i}`, new Color3(0.15, 0.35, 0.5));
-    }
-    for (const x of [-3.5, -1.75, 0, 1.75, 3.5]) {
-      const window = CreateBox(`win-${x}`, { width: 0.55, height: 0.28, depth: 0.12 }, this.scene);
-      window.position = new Vector3(x, -0.15, -0.85);
-      window.material = glowMat(this.scene, `winMat-${x}`, new Color3(0.95, 0.75, 0.35));
-    }
+  private rebuildStationArt(): void {
+    // Turrets / deck / shield are parented under stationRoot.
+    this.stationRoot?.dispose();
+    this.cannons.length = 0;
+    this.stationRoot = null;
+    this.stationShield = null;
+    this.buildStation(TIER_KITS[this.tier]);
+  }
 
-    const tower = CreateBox("tower", { width: 1.6, height: 1.6, depth: 1.2 }, this.scene);
-    tower.position = new Vector3(0, STATION_DECK_Y + 1.05, 0.35);
-    tower.material = litMat(this.scene, "towerMat", new Color3(0.32, 0.48, 0.6), new Color3(0.07, 0.15, 0.22));
-    const dish = CreateCylinder("dish", { height: 0.12, diameter: 1.1 }, this.scene);
-    dish.position = new Vector3(0, STATION_DECK_Y + 1.95, 0.35);
-    dish.material = litMat(this.scene, "dishMat", new Color3(0.7, 0.75, 0.85), new Color3(0.15, 0.2, 0.28));
+  private buildStation(kit: TierArtKit): void {
+    const root = new TransformNode("stationRoot", this.scene);
+    this.stationRoot = root;
+
+    // Dark under-hull so the deck billboard has a solid silhouette edge.
+    const hull = CreateBox("stationHull", { width: 13.8, height: 1.8, depth: 2.6 }, this.scene);
+    hull.parent = root;
+    hull.position = new Vector3(0, -0.65, 0.7);
+    hull.material = litMat(this.scene, "hullMat", new Color3(0.08, 0.12, 0.18), new Color3(0.02, 0.04, 0.07), 0.15);
+
+    // Pre-cropped deck plate (cyan strips + hardpoint rings, no sky).
+    const deckW = 15.2;
+    const deckH = 5.8;
+    const deck = CreatePlane("stationDeckArt", { width: deckW, height: deckH }, this.scene);
+    deck.parent = root;
+    deck.position = new Vector3(0, 1.85, 0.35);
+    deck.rotation.x = 0.18;
+    const deckMat = spriteMat(this.scene, "deckArtMat", kit.deck, false);
+    deckMat.emissiveColor = new Color3(0.55, 0.6, 0.7);
+    deck.material = deckMat;
 
     for (let i = 0; i < CANNON_X.length; i++) {
-      this.buildCannon(i, CANNON_X[i]);
+      this.buildArtCannon(i, CANNON_X[i], kit, root);
     }
 
     const shield = CreateBox("shieldHint", { width: 12.2, height: 0.7, depth: 2.4 }, this.scene);
+    shield.parent = root;
     shield.position = new Vector3(0, IMPACT_Y + 0.1, 0.05);
     const shieldMat = new StandardMaterial("shieldMat", this.scene);
     shieldMat.emissiveColor = new Color3(0.15, 0.85, 0.65);
@@ -257,47 +248,49 @@ export class SpaceView {
     this.stationShield = shield;
   }
 
-  /** Short turret: fixed pedestal + aimable barrel pivot. */
-  private buildCannon(i: number, x: number): void {
-    const pedestal = CreateCylinder(`cannonPedestal-${i}`, { height: 0.45, diameterTop: 0.75, diameterBottom: 1.05 }, this.scene);
-    pedestal.position = new Vector3(x, STATION_DECK_Y + 0.4, -0.4);
-    pedestal.material = litMat(
-      this.scene,
-      `pedestalMat-${i}`,
-      new Color3(0.45, 0.5, 0.58),
-      new Color3(0.1, 0.12, 0.16),
-    );
+  /**
+   * Layered PNG turret: base-pivot fixed on hardpoint (optional yaw),
+   * barrel overlays and pitches about the rear hinge.
+   */
+  private buildArtCannon(i: number, x: number, kit: TierArtKit, parent: TransformNode): void {
+    const size = kit.turretSize;
+    const flip = x < 0 ? -1 : 1;
 
-    const pivot = new TransformNode(`cannonPivot-${i}`, this.scene);
-    pivot.position = new Vector3(x, STATION_DECK_Y + 0.78, -0.4);
+    const root = new TransformNode(`turretRoot-${i}`, this.scene);
+    root.parent = parent;
+    // Sit on the deck plate hardpoint rings, slightly toward camera.
+    root.position = new Vector3(x, STATION_DECK_Y + 1.35, -0.85);
+    // Mirror the left hardpoint so painted barrels lean outward/up.
+    root.scaling.x = flip;
 
-    const yoke = CreateBox(`cannonYoke-${i}`, { width: 0.7, height: 0.28, depth: 0.45 }, this.scene);
-    yoke.parent = pivot;
-    yoke.position = new Vector3(0, 0, 0);
-    yoke.material = litMat(this.scene, `yokeMat-${i}`, new Color3(0.55, 0.6, 0.68), new Color3(0.12, 0.14, 0.18));
+    const yaw = new TransformNode(`turretYaw-${i}`, this.scene);
+    yaw.parent = root;
 
-    const barrel = CreateCylinder(`cannonBarrel-${i}`, { height: BARREL_LEN, diameterTop: 0.24, diameterBottom: 0.38 }, this.scene);
-    barrel.parent = pivot;
-    barrel.position = new Vector3(0, BARREL_LEN * 0.5 + 0.08, 0);
-    barrel.material = litMat(this.scene, `barrelMat-${i}`, new Color3(0.65, 0.7, 0.8), new Color3(0.18, 0.22, 0.3));
+    const base = CreatePlane(`turretBase-${i}`, { width: size, height: size }, this.scene);
+    base.parent = yaw;
+    base.position = new Vector3(0, 0, 0);
+    base.renderingGroupId = 1;
+    base.material = spriteMat(this.scene, `turretBaseMat-${i}`, kit.basePivot, true);
 
-    const collar = CreateCylinder(`cannonCollar-${i}`, { height: 0.16, diameter: 0.48 }, this.scene);
-    collar.parent = pivot;
-    collar.position = new Vector3(0, 0.18, 0);
-    collar.material = litMat(this.scene, `collarMat-${i}`, new Color3(0.78, 0.55, 0.25), new Color3(0.32, 0.18, 0.05));
+    const cradle = planeUvToLocal(kit.baseHingeU, kit.baseHingeV, size, size);
+    const hingeLocal = planeUvToLocal(kit.hingeU, kit.hingeV, size, size);
+    const tipLocal = planeUvToLocal(kit.tipU, kit.tipV, size, size);
 
-    const muzzle = CreateDisc(`cannonMuzzle-${i}`, { radius: 0.2, tessellation: 20 }, this.scene);
-    muzzle.parent = pivot;
-    muzzle.rotation.x = Math.PI / 2;
-    muzzle.position = new Vector3(0, BARREL_LEN + 0.08, 0);
-    muzzle.material = glowMat(this.scene, `muzzleMat-${i}`, new Color3(1, 0.55, 0.2));
+    const hinge = new TransformNode(`turretHinge-${i}`, this.scene);
+    hinge.parent = yaw;
+    // Sit the hinge in the base cradle holes, not on the front of the disc.
+    hinge.position = new Vector3(cradle.x, cradle.y, -0.06);
 
-    const tip = CreateSphere(`cannonTip-${i}`, { diameter: 0.16, segments: 8 }, this.scene);
-    tip.parent = pivot;
-    tip.position = new Vector3(0, BARREL_LEN + 0.05, 0);
-    tip.material = glowMat(this.scene, `tipMat-${i}`, new Color3(1, 0.85, 0.4));
+    const barrel = CreatePlane(`turretBarrel-${i}`, { width: size, height: size }, this.scene);
+    barrel.parent = hinge;
+    // Offset so the barrel's rear-hinge UV lands on the cradle hinge.
+    barrel.position = new Vector3(-hingeLocal.x, -hingeLocal.y, 0);
+    barrel.renderingGroupId = 2;
+    barrel.material = spriteMat(this.scene, `turretBarrelMat-${i}`, kit.barrel, true);
 
-    this.cannons.push({ x, pivot, barrel, muzzle });
+    const muzzleLocal = tipLocal.subtract(hingeLocal);
+
+    this.cannons.push({ x, flip, root, yaw, hinge, basePlane: base, barrelPlane: barrel, muzzleLocal });
   }
 
   private buildStars(): Mesh {
@@ -339,25 +332,27 @@ export class SpaceView {
       this.cannons.find((c) => Math.abs(c.x - targetX) === Math.min(...this.cannons.map((o) => Math.abs(o.x - targetX)))) ??
       this.cannons[0];
     if (!rig) return new Vector3(0, STATION_DECK_Y + 1.5, -0.4);
-    const local = new Vector3(0, BARREL_LEN + 0.08, 0);
-    return Vector3.TransformCoordinates(local, rig.pivot.getWorldMatrix());
+    return Vector3.TransformCoordinates(rig.muzzleLocal, rig.hinge.getWorldMatrix());
   }
 
   private aimCannons(): void {
     for (const rig of this.cannons) {
       if (!this.aimTarget) {
-        rig.pivot.rotation.set(0, 0, 0);
+        rig.yaw.rotation.set(0, 0, 0);
+        rig.hinge.rotation.set(0, 0, 0);
         continue;
       }
-      const dx = this.aimTarget.x - rig.pivot.position.x;
-      const dy = this.aimTarget.y - rig.pivot.position.y;
-      // Barrel defaults to +Y; rotate in the front XY plane toward the target.
-      const angle = -Math.atan2(dx, Math.max(0.35, dy));
-      // Clamp so barrels don't flip into the deck.
-      rig.pivot.rotation.z = Math.max(-0.95, Math.min(0.95, angle));
-      // Slight nod in depth toward the rock.
-      const dz = this.aimTarget.z - rig.pivot.position.z;
-      rig.pivot.rotation.x = Math.max(-0.25, Math.min(0.15, Math.atan2(dz, Math.max(0.5, dy)) * 0.35));
+      const hingeWorld = rig.hinge.getAbsolutePosition();
+      const dx = this.aimTarget.x - hingeWorld.x;
+      const dy = this.aimTarget.y - hingeWorld.y;
+      // Painted barrel points up-right; left mount mirrors via scale.x = -1.
+      const rest = Math.atan2(rig.muzzleLocal.x, Math.max(0.05, rig.muzzleLocal.y));
+      const wantLocal = Math.atan2(dx * rig.flip, Math.max(0.35, dy));
+      const pitch = Math.max(-1.15, Math.min(1.15, wantLocal - rest));
+      // Negative scale.x mirrors rotation sense — keep world aim coherent.
+      rig.hinge.rotation.z = pitch;
+      const yaw = Math.max(-0.3, Math.min(0.3, -dx * rig.flip * 0.07));
+      rig.yaw.rotation.y = yaw;
     }
   }
 
