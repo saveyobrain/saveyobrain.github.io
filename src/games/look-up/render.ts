@@ -60,17 +60,17 @@ interface CannonRig {
 }
 
 /** Half-width of the play lane (world X). */
-export const PLAYFIELD_HALF = 5.6;
+export const PLAYFIELD_HALF = 5.2;
 /** Y of the station deck top. */
-export const STATION_DECK_Y = 0.35;
+export const STATION_DECK_Y = 0.4;
 /** Asteroids hit the station when they reach this height. */
-export const IMPACT_Y = 1.85;
+export const IMPACT_Y = 1.7;
 /** Bottom of the visible spawn band. */
 export const SPAWN_Y = 8.6;
 /** Top of the visible spawn band — tall so rocks don't share one row. */
 export const SPAWN_Y_MAX = 13.5;
 
-const CANNON_X = [-3.4, 3.4] as const;
+const CANNON_X = [-2.6, 2.6] as const;
 const BARREL_LEN = 1.05;
 
 function litMat(scene: Scene, name: string, diffuse: Color3, emissive: Color3, specular = 0.35): StandardMaterial {
@@ -130,7 +130,40 @@ function rockPalette(seed: number): { diffuse: Color3; emissive: Color3 } {
   return { diffuse: new Color3(0.52, 0.42, 0.3), emissive: new Color3(0.09, 0.06, 0.04) };
 }
 
-/** Front-facing space view: wide roundish station at bottom, rocky asteroids fall from above. */
+/**
+ * Box slab with vertical corner cylinders so the silhouette reads rounded,
+ * without switching to the wide globe-style hull.
+ */
+function roundedSlab(
+  scene: Scene,
+  name: string,
+  width: number,
+  height: number,
+  depth: number,
+  position: Vector3,
+  cornerR: number,
+  mat: StandardMaterial,
+): void {
+  const r = Math.min(cornerR, width * 0.2, depth * 0.45);
+  const core = CreateBox(`${name}Core`, { width: width - 2 * r, height, depth }, scene);
+  core.position = position.clone();
+  core.material = mat;
+  for (const sx of [-1, 1] as const) {
+    for (const sz of [-1, 1] as const) {
+      const post = CreateCylinder(`${name}Corner${sx}${sz}`, { height, diameter: r * 2 }, scene);
+      post.position = new Vector3(position.x + sx * (width / 2 - r), position.y, position.z + sz * (depth / 2 - r));
+      post.material = mat;
+    }
+  }
+  // Side filler strips so the rounded corners don't leave gaps on X edges.
+  for (const sx of [-1, 1] as const) {
+    const side = CreateBox(`${name}Side${sx}`, { width: r * 2, height, depth: depth - 2 * r }, scene);
+    side.position = new Vector3(position.x + sx * (width / 2 - r), position.y, position.z);
+    side.material = mat;
+  }
+}
+
+/** Front-facing space view: prior boxy station (rounded corners) + aiming cannons. */
 export class SpaceView {
   readonly camera: TargetCamera;
   private readonly bodies = new Map<string, BodyMesh>();
@@ -144,67 +177,59 @@ export class SpaceView {
   constructor(private readonly scene: Scene) {
     scene.clearColor = new Color4(0.015, 0.03, 0.07, 1);
 
-    this.camera = new TargetCamera("cam", new Vector3(0, 6.5, -18), scene);
-    this.camera.setTarget(new Vector3(0, 6.2, 0));
-    this.camera.fov = 0.8;
+    this.camera = new TargetCamera("cam", new Vector3(0, 6.4, -17.5), scene);
+    this.camera.setTarget(new Vector3(0, 6.4, 0));
+    this.camera.fov = 0.78;
     this.camera.minZ = 0.2;
     this.camera.maxZ = 80;
 
-    const hemi = new HemisphericLight("hemi", new Vector3(0.15, 1, -0.35), scene);
-    hemi.intensity = 0.75;
-    hemi.groundColor = new Color3(0.12, 0.14, 0.2);
+    const hemi = new HemisphericLight("hemi", new Vector3(0.1, 1, -0.4), scene);
+    hemi.intensity = 0.7;
+    hemi.groundColor = new Color3(0.1, 0.14, 0.22);
 
-    const sun = new PointLight("sun", new Vector3(4, 11, -9), scene);
-    sun.intensity = 1;
-    sun.diffuse = new Color3(0.9, 0.93, 1);
+    const sun = new PointLight("sun", new Vector3(3, 12, -10), scene);
+    sun.intensity = 0.95;
+    sun.diffuse = new Color3(0.85, 0.92, 1);
 
     this.buildStation();
     this.buildStars();
   }
 
   private buildStation(): void {
-    // Wide, roundish hull — flattened ellipsoid peeking from the bottom.
-    const hull = CreateSphere("stationHull", { diameterX: 16.5, diameterY: 3.4, diameterZ: 4.2, segments: 28 }, this.scene);
-    hull.position = new Vector3(0, -0.85, 0.55);
-    hull.material = litMat(this.scene, "hullMat", new Color3(0.26, 0.36, 0.46), new Color3(0.06, 0.1, 0.15));
+    // Previous boxy hull/deck (pre-globe redesign), with rounded corners only.
+    const hullMat = litMat(this.scene, "hullMat", new Color3(0.22, 0.3, 0.4), new Color3(0.05, 0.09, 0.14));
+    roundedSlab(this.scene, "stationHull", 13.5, 2.8, 2.6, new Vector3(0, -0.7, 0.4), 0.55, hullMat);
 
-    // Curved deck ring on top of the hull.
-    const deck = CreateCylinder("stationDeck", { height: 0.32, diameterTop: 13.2, diameterBottom: 13.8 }, this.scene);
-    deck.position = new Vector3(0, STATION_DECK_Y, 0.15);
-    deck.material = litMat(this.scene, "deckMat", new Color3(0.42, 0.64, 0.78), new Color3(0.1, 0.22, 0.3));
+    const deckMat = litMat(this.scene, "deckMat", new Color3(0.4, 0.62, 0.78), new Color3(0.1, 0.22, 0.3));
+    roundedSlab(this.scene, "stationDeck", 12, 0.28, 2.2, new Vector3(0, STATION_DECK_Y, 0.1), 0.45, deckMat);
 
-    const rim = CreateCylinder("stationRim", { height: 0.18, diameterTop: 14.4, diameterBottom: 14.6 }, this.scene);
-    rim.position = new Vector3(0, STATION_DECK_Y - 0.05, 0.15);
-    rim.material = litMat(this.scene, "rimMat", new Color3(0.55, 0.62, 0.72), new Color3(0.12, 0.16, 0.22));
-
-    // Window band around the front curve.
-    for (let i = -5; i <= 5; i++) {
-      const ang = (i / 5) * 0.85;
-      const wx = Math.sin(ang) * 6.2;
-      const wz = -Math.cos(ang) * 1.55;
-      const window = CreateBox(`win-${i}`, { width: 0.55, height: 0.32, depth: 0.12 }, this.scene);
-      window.position = new Vector3(wx, -0.05, wz);
-      window.rotation.y = ang;
-      window.material = glowMat(this.scene, `winMat-${i}`, new Color3(0.95, 0.78, 0.4));
+    for (let i = -4; i <= 4; i++) {
+      const seam = CreateBox(`seam-${i}`, { width: 0.08, height: 0.06, depth: 1.9 }, this.scene);
+      seam.position = new Vector3(i * 1.25, STATION_DECK_Y + 0.18, 0.05);
+      seam.material = glowMat(this.scene, `seamMat-${i}`, new Color3(0.15, 0.35, 0.5));
+    }
+    for (const x of [-3.5, -1.75, 0, 1.75, 3.5]) {
+      const window = CreateBox(`win-${x}`, { width: 0.55, height: 0.28, depth: 0.12 }, this.scene);
+      window.position = new Vector3(x, -0.15, -0.85);
+      window.material = glowMat(this.scene, `winMat-${x}`, new Color3(0.95, 0.75, 0.35));
     }
 
-    // Low rounded hub in the center.
-    const hub = CreateSphere("hub", { diameterX: 2.6, diameterY: 1.5, diameterZ: 2.2, segments: 18 }, this.scene);
-    hub.position = new Vector3(0, STATION_DECK_Y + 0.85, 0.4);
-    hub.material = litMat(this.scene, "hubMat", new Color3(0.34, 0.5, 0.62), new Color3(0.08, 0.16, 0.22));
-    const dish = CreateCylinder("dish", { height: 0.1, diameter: 1.3 }, this.scene);
-    dish.position = new Vector3(0, STATION_DECK_Y + 1.65, 0.4);
-    dish.material = litMat(this.scene, "dishMat", new Color3(0.72, 0.78, 0.88), new Color3(0.16, 0.22, 0.3));
+    const tower = CreateBox("tower", { width: 1.6, height: 1.6, depth: 1.2 }, this.scene);
+    tower.position = new Vector3(0, STATION_DECK_Y + 1.05, 0.35);
+    tower.material = litMat(this.scene, "towerMat", new Color3(0.32, 0.48, 0.6), new Color3(0.07, 0.15, 0.22));
+    const dish = CreateCylinder("dish", { height: 0.12, diameter: 1.1 }, this.scene);
+    dish.position = new Vector3(0, STATION_DECK_Y + 1.95, 0.35);
+    dish.material = litMat(this.scene, "dishMat", new Color3(0.7, 0.75, 0.85), new Color3(0.15, 0.2, 0.28));
 
     for (let i = 0; i < CANNON_X.length; i++) {
       this.buildCannon(i, CANNON_X[i]);
     }
 
-    const shield = CreateCylinder("shieldHint", { height: 0.55, diameter: 14 }, this.scene);
-    shield.position = new Vector3(0, IMPACT_Y + 0.05, 0.1);
+    const shield = CreateBox("shieldHint", { width: 12.2, height: 0.7, depth: 2.4 }, this.scene);
+    shield.position = new Vector3(0, IMPACT_Y + 0.1, 0.05);
     const shieldMat = new StandardMaterial("shieldMat", this.scene);
     shieldMat.emissiveColor = new Color3(0.15, 0.85, 0.65);
-    shieldMat.alpha = 0.14;
+    shieldMat.alpha = 0.16;
     shieldMat.wireframe = true;
     shieldMat.disableLighting = true;
     shield.material = shieldMat;
@@ -502,12 +527,26 @@ export function spawnAbove(laneX: number, height: number, depth = 0): { x: numbe
   };
 }
 
-/** Distinct X lanes across the playfield (shuffled by caller). */
-export function lanePositions(count: number): number[] {
+/**
+ * Random X positions across the playfield (not a left→right sweep).
+ * Uses rejection sampling so rocks stay spaced; falls back to shuffled even lanes.
+ */
+export function randomLaneXs(count: number, rng: { next(): number; shuffle<T>(items: T[]): T[] }): number[] {
   const n = Math.max(1, count);
   const margin = 0.9;
-  return Array.from({ length: n }, (_, i) => {
-    const t = (i + 0.5) / n;
-    return -PLAYFIELD_HALF + margin + t * (2 * (PLAYFIELD_HALF - margin));
-  });
+  const span = PLAYFIELD_HALF - margin;
+  const minGap = Math.min(1.35, (2 * span) / Math.max(n, 1) * 0.55);
+  const xs: number[] = [];
+  for (let attempt = 0; attempt < n * 40 && xs.length < n; attempt++) {
+    const x = (rng.next() * 2 - 1) * span;
+    if (xs.every((other) => Math.abs(other - x) >= minGap)) xs.push(x);
+  }
+  if (xs.length < n) {
+    const fallback = Array.from({ length: n }, (_, i) => {
+      const t = (i + 0.5) / n;
+      return -span + t * (2 * span);
+    });
+    return rng.shuffle(fallback);
+  }
+  return rng.shuffle(xs);
 }

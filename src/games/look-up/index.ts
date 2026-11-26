@@ -29,7 +29,7 @@ import {
   SPAWN_Y,
   SPAWN_Y_MAX,
   SpaceView,
-  lanePositions,
+  randomLaneXs,
   spawnAbove,
   type BodyVisual,
   type ShotVisual,
@@ -184,14 +184,14 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     bodies = [];
     shots = [];
     selectedId = null;
-    const values = spawnValues(cfg, rng);
-    // Distinct columns across the screen (shuffled), staggered in Y so they aren't one row.
-    const lanes = rng.shuffle(lanePositions(values.length));
+    const values = rng.shuffle(spawnValues(cfg, rng));
+    // Random X picks (shuffled), not a left→right sweep. Heights shuffled separately.
+    const xs = randomLaneXs(values.length, rng);
+    const heightRanks = rng.shuffle(Array.from({ length: values.length }, (_, i) => i));
     values.forEach((label, i) => {
-      const x = lanes[i] + (rng.next() - 0.5) * 0.35;
-      const t = values.length <= 1 ? 0.5 : i / (values.length - 1);
-      const height = SPAWN_Y + t * (SPAWN_Y_MAX - SPAWN_Y) + (rng.next() - 0.5) * 0.5;
-      const p = spawnAbove(x, height, (rng.next() - 0.5) * 0.35);
+      const t = values.length <= 1 ? 0.5 : heightRanks[i] / (values.length - 1);
+      const height = SPAWN_Y + t * (SPAWN_Y_MAX - SPAWN_Y) + (rng.next() - 0.5) * 0.45;
+      const p = spawnAbove(xs[i], height, (rng.next() - 0.5) * 0.35);
       bodies.push({
         id: String(nextId++),
         kind: "asteroid",
