@@ -34,6 +34,8 @@ import {
   type ShotVisual,
 } from "./render";
 import {
+  hazardSpawnBlocked,
+  lifeCap,
   shouldSpawnBonus,
   spawnValues,
   startingLives,
@@ -51,8 +53,10 @@ type State = "intro" | "playing" | "paused" | "won" | "lost" | "waveClear";
 
 interface Body {
   id: string;
-  kind: "asteroid" | "bonus";
+  kind: "asteroid" | "shield" | "life";
   label: number;
+  /** Set once a shield or life has been granted, so impact cannot grant it twice. */
+  collected?: boolean;
   x: number;
   y: number;
   z: number;
@@ -129,7 +133,9 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   let activeCfg: WaveConfig = waveConfig(1, difficulty);
   let pendingLabels: number[] = [];
   let pendingBonus = false;
+  let pendingLife = false;
   let spawnCooldown = 0;
+  let lifeCooldown = 0;
 
   const hud = createLookUpHud(() => togglePause());
   stage.append(hud.el);
@@ -159,6 +165,19 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     return bodies.filter((b) => b.kind === "asteroid" && !b.burning);
   }
 
+  /** Rocks plus pickups the player can aim at. */
+  function aimable(): Body[] {
+    return bodies.filter((b) => !b.burning);
+  }
+
+  function hazardCount(): number {
+    return activeThreats().length;
+  }
+
+  function pickupInFlight(kind: "shield" | "life"): boolean {
+    return bodies.some((b) => b.kind === kind && !b.burning);
+  }
+
   function distToImpact(b: Body): number {
     const dx = b.targetX - b.x;
     const dy = IMPACT_Y - b.y;
@@ -167,13 +186,14 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
 
   function pickDefaultTarget(): void {
     const threats = activeThreats();
-    if (threats.length === 0) {
+    const pool = threats.length > 0 ? threats : aimable();
+    if (pool.length === 0) {
       selectedId = null;
       return;
     }
-    // Prefer the rock closest to impact along its approach path.
-    threats.sort((a, b) => distToImpact(a) - distToImpact(b) || a.y - b.y);
-    selectedId = threats[0].id;
+    // Prefer the rock closest to impact. A pickup is the default only when no rock is left.
+    pool.sort((a, b) => distToImpact(a) - distToImpact(b) || a.y - b.y);
+    selectedId = pool[0].id;
   }
 
   function inboundAlive(): number {
@@ -204,17 +224,17 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     });
   }
 
-  function releaseBonus(): void {
+  function releasePickup(kind: "shield" | "life"): void {
     const p = pickSeparatedApproach(rng, view.playFrustum(), occupiedSpots());
     bodies.push({
       id: String(nextId++),
-      kind: "bonus",
+      kind,
       label: 0,
       x: p.x,
       y: Math.max(p.y, 6),
       z: p.z,
       targetX: p.targetX * 0.5,
-      speed: activeCfg.speed * 0.8,
+      speed: activeCfg.speed * 0.75,
       burning: false,
       burnTimer: 0,
       hitFlash: 0,
@@ -222,8 +242,18 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     });
   }
 
+  /** Keep a life in flight while the player is under 3 and under the wave cap. */
+  function ensureLifePickup(): void {
+    if (lifeCooldown > 0 || lives >= 3 || lives >= maxLives) return;
+    if (pickupInFlight("life") || pendingLife) return;
+    // Don't chain a new life after the last rock is gone, or the wave never clears.
+    if (pendingLabels.length === 0 && activeThreats().length === 0) return;
+    pendingLife = true;
+  }
+
   /** True when another inbound may enter (serial = wait for clear; else under cap + gap). */
   function canReleaseInbound(): boolean {
+    if (hazardSpawnBlocked(hazardCount())) return false;
     const live = inboundAlive();
     if (live >= activeCfg.maxConcurrent) return false;
     if (activeCfg.maxConcurrent <= 1) return live === 0;
@@ -231,22 +261,30 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function tryReleaseFromQueue(): void {
-    if (pendingLabels.length > 0) {
-      if (!canReleaseInbound()) return;
+    if (pendingLabels.length > 0 && canReleaseInbound()) {
       const label = pendingLabels.shift();
-      if (label === undefined) return;
-      releaseInbound(label);
-      spawnCooldown = activeCfg.maxConcurrent <= 1 ? 0 : activeCfg.spawnGap;
-      if (!selectedId) {
-        pickDefaultTarget();
-        showTaskForSelection();
+      if (label !== undefined) {
+        releaseInbound(label);
+        spawnCooldown = activeCfg.maxConcurrent <= 1 ? 0 : activeCfg.spawnGap;
+        if (!selectedId) {
+          pickDefaultTarget();
+          showTaskForSelection();
+        }
       }
-      return;
     }
-    if (pendingBonus && spawnCooldown <= 0) {
+    // Pickups are not hazards, so a full screen of rocks does not block them.
+    ensureLifePickup();
+    if (pendingLife && lifeCooldown <= 0 && !pickupInFlight("life")) {
+      pendingLife = false;
+      releasePickup("life");
+      lifeCooldown = 1.2;
+    }
+    if (pendingBonus && spawnCooldown <= 0 && !pickupInFlight("shield")) {
       pendingBonus = false;
-      releaseBonus();
-      spawnCooldown = activeCfg.spawnGap;
+      // Already at 3 but under the wave cap: this bonus is the extra life.
+      if (lives >= 3 && lives < maxLives && !pickupInFlight("life")) releasePickup("life");
+      else releasePickup("shield");
+      spawnCooldown = Math.max(spawnCooldown, activeCfg.spawnGap);
     }
   }
 
@@ -254,13 +292,26 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     return bodies.find((b) => b.id === selectedId && !b.burning);
   }
 
+  function showCollectTask(body: Body): void {
+    taskForId = body.id;
+    const text = body.kind === "life" ? t.collectLife : t.collectShield;
+    task = { kind: "div", text, answer: 0, options: [0], labels: [t.collect] };
+    panel.el.classList.remove("lup-idle");
+    panel.show(task);
+    panel.setEnabled(state === "playing" && feedbackTimer <= 0);
+  }
+
   function showTaskForSelection(): void {
     const body = selectedBody();
-    if (!body || body.kind !== "asteroid") {
+    if (!body) {
       task = undefined;
       panel.el.classList.add("lup-idle");
       panel.show({ kind: "div", text: t.pickTarget, answer: -1, options: [2, 3, 4, 5] });
       panel.setEnabled(false);
+      return;
+    }
+    if (body.kind === "shield" || body.kind === "life") {
+      showCollectTask(body);
       return;
     }
     panel.el.classList.remove("lup-idle");
@@ -289,9 +340,13 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     aimLock = false;
     taskForId = null;
     task = undefined;
+    maxLives = lifeCap(wave);
     pendingLabels = rng.shuffle(spawnValues(activeCfg, rng));
     pendingBonus = shouldSpawnBonus(activeCfg, rng);
+    pendingLife = false;
     spawnCooldown = 0;
+    lifeCooldown = 0;
+    ensureLifePickup();
     // Release the first inbound immediately so play starts with something on screen.
     tryReleaseFromQueue();
     pickDefaultTarget();
@@ -300,8 +355,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function setupRun(withIntro = true): void {
-    lives = startingLives(difficulty);
-    maxLives = lives;
+    maxLives = lifeCap(wave);
+    lives = Math.min(startingLives(difficulty), maxLives);
     shields = 0;
     score = 0;
     feedbackTimer = 0;
@@ -406,7 +461,12 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   function answer(index: number): void {
     if (state !== "playing" || feedbackTimer > 0 || !task || index >= task.options.length) return;
     const body = selectedBody();
-    if (!body || body.kind !== "asteroid") return;
+    if (!body) return;
+    if (body.kind === "shield" || body.kind === "life") {
+      if (index !== 0) return;
+      beginCollect(body);
+      return;
+    }
 
     const pick = task.options[index];
     const correctIndex = task.options.findIndex((d) => splitDivisors(body.label).includes(d));
@@ -458,19 +518,36 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     feedbackTimer = correct ? FEEDBACK_OK : FEEDBACK_BAD;
   }
 
-  function collectBonus(body: Body): void {
+  function beginCollect(body: Body): void {
+    if (body.collected || body.burning) return;
+    fireShot(body, true);
+    collectPickup(body);
+    panel.showResult(0, 0);
+    panel.setEnabled(false);
+    feedbackTimer = FEEDBACK_OK;
+  }
+
+  function collectPickup(body: Body): void {
+    if (body.collected) return;
+    body.collected = true;
     body.burning = true;
     body.burnTimer = BURN_LIFE;
-    shields += 1;
-    score += 25;
+    if (body.kind === "shield") {
+      shields += 1;
+      score += 25;
+    } else if (body.kind === "life" && lives < maxLives) {
+      lives += 1;
+      score += 15;
+    }
     syncHud();
+    ensureLifePickup();
   }
 
   function impact(body: Body): void {
     body.burning = true;
     body.burnTimer = BURN_LIFE * 0.5;
-    if (body.kind === "bonus") {
-      collectBonus(body);
+    if (body.kind === "shield" || body.kind === "life") {
+      collectPickup(body);
       return;
     }
     if (shields > 0) {
@@ -480,6 +557,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     }
     lives -= 1;
     syncHud();
+    ensureLifePickup();
     if (lives <= 0) lose();
   }
 
@@ -533,13 +611,14 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     if (!id) return;
     const body = bodies.find((b) => b.id === id && !b.burning);
     if (!body) return;
-    if (body.kind === "bonus") {
-      // Tap bonus to scoop once it has fallen near the station.
-      if (body.y < IMPACT_Y + 5) {
-        collectBonus(body);
-        pickDefaultTarget();
-        showTaskForSelection();
+    if (body.kind === "shield" || body.kind === "life") {
+      if (selectedId === body.id && aimLock && feedbackTimer <= 0) {
+        beginCollect(body);
+        return;
       }
+      selectedId = body.id;
+      aimLock = true;
+      showTaskForSelection();
       return;
     }
     selectedId = body.id;
@@ -562,7 +641,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       case "move": {
         if (state !== "playing") break;
         // Cycle among threats sorted by closeness to the station (lowest Y first).
-        const threats = activeThreats().sort((a, b) => distToImpact(a) - distToImpact(b) || a.y - b.y);
+        const threats = aimable().sort((a, b) => distToImpact(a) - distToImpact(b) || a.y - b.y);
         if (threats.length === 0) break;
         const idx = Math.max(0, threats.findIndex((b) => b.id === selectedId));
         const next =
@@ -607,7 +686,9 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     if (aimLock || feedbackTimer > 0) return;
     // No manual target: keep auto-aim on the rock closest to impact.
     const closest = activeThreats().sort((a, b) => distToImpact(a) - distToImpact(b) || a.y - b.y)[0];
-    if (closest && closest.id !== selectedId && distToImpact(current) > distToImpact(closest) + 0.05) {
+    if (!closest || closest.id === selectedId) return;
+    const unlockedPickup = current.kind !== "asteroid";
+    if (unlockedPickup || distToImpact(current) > distToImpact(closest) + 0.05) {
       selectedId = closest.id;
       showTaskForSelection();
     }
@@ -617,6 +698,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     time += dt;
     if (state === "playing") {
       if (spawnCooldown > 0) spawnCooldown -= dt;
+      if (lifeCooldown > 0) lifeCooldown -= dt;
       tryReleaseFromQueue();
       if (feedbackTimer > 0) {
         feedbackTimer -= dt;
@@ -632,7 +714,8 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       for (const shot of shots) shot.life -= dt;
       shots = shots.filter((s) => s.life > 0);
 
-      const queueEmpty = pendingLabels.length === 0 && !pendingBonus;
+      const pickupFlying = bodies.some((b) => b.kind !== "asteroid" && !b.burning);
+      const queueEmpty = pendingLabels.length === 0 && !pendingBonus && !pendingLife && !pickupFlying;
       if (
         queueEmpty &&
         activeThreats().length === 0 &&
@@ -653,7 +736,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     const visuals: BodyVisual[] = bodies.map((b) => ({
       id: b.id,
       kind: b.kind,
-      label: b.kind === "bonus" ? 0 : b.label,
+      label: b.kind === "asteroid" ? b.label : 0,
       x: b.x,
       y: b.y,
       z: b.z,

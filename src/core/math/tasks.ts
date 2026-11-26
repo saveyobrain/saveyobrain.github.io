@@ -8,6 +8,8 @@ export interface MathTask {
   answer: number;
   /** Shuffled answer options; always contains `answer` exactly once. */
   options: number[];
+  /** Button text. Falls back to the numeric option when omitted. */
+  labels?: string[];
 }
 
 interface RawTask {

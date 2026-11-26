@@ -1010,6 +1010,11 @@ button {
   margin: 0 auto;
 }
 
+.task-options[data-count="1"] {
+  --cols: 1;
+  max-width: 280px;
+}
+
 .task-options[data-count="3"] {
   --cols: 3;
 }

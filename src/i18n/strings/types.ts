@@ -95,6 +95,9 @@ export interface Strings {
     shields: (n: number) => string;
     taskPrompt: (n: number) => string;
     pickTarget: string;
+    collectShield: string;
+    collectLife: string;
+    collect: string;
     waveClear: string;
     waveClearHint: string;
     nextWave: string;

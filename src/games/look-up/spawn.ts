@@ -11,6 +11,11 @@ export const IMPACT_Y = 0.92;
 /** Minimum centre distance so one rock's badge does not cover another. */
 export const MIN_SEPARATION = 2.55;
 /**
+ * Wider gap for split shards. 36 ÷ 3, 36 ÷ 4, and 36 ÷ 6 drop 3, 4, or 6
+ * full-size rocks; a tighter ring lets those pieces cover each other.
+ */
+export const SPLIT_SEPARATION = 3.45;
+/**
  * Clearance past the frustum edge. Covers the largest rock (≈1.45 world units
  * from centre, plus the selected-scale bump) so a rock is fully hidden at spawn,
  * while keeping it close enough to start showing within about a second.
@@ -160,7 +165,7 @@ export function splitRingOffsets(
   const n = Math.max(1, count);
   const span = Math.PI * 0.76;
   const step = n <= 1 ? Math.PI : span / (n - 1);
-  const needed = n <= 1 ? 1.5 : MIN_SEPARATION / (2 * Math.sin(step / 2));
+  const needed = n <= 1 ? 1.5 : SPLIT_SEPARATION / (2 * Math.sin(step / 2));
   const r0 = radius ?? Math.max(2.35, needed + 0.2);
   const jitter = (rng.next() - 0.5) * 0.18;
   const start = Math.PI * 0.12;
@@ -185,26 +190,37 @@ export function placeAroundBreak(
   parent: { x: number; y: number; z: number },
   offset: { dx: number; dy: number; dz: number },
   others: readonly { x: number; y: number }[],
+  min = SPLIT_SEPARATION,
 ): { x: number; y: number; z: number } {
   let x = parent.x + offset.dx;
   let y = parent.y + Math.max(0, offset.dy);
-  for (let pass = 0; pass < 6; pass++) {
+  const limit = PLAYFIELD_HALF * 2.2;
+  for (let pass = 0; pass < 8; pass++) {
+    x = Math.max(-limit, Math.min(limit, x));
     for (const o of others) {
       const dx = x - o.x;
       const dy = y - o.y;
       const d = Math.hypot(dx, dy);
-      if (d >= MIN_SEPARATION) continue;
-      if (d === 0) {
-        x += MIN_SEPARATION;
+      if (d >= min) continue;
+      if (d < 1e-4) {
+        y += min;
         continue;
       }
-      const push = MIN_SEPARATION - d;
-      x += (dx / d) * push;
-      if (dy > 0) y += (dy / d) * push;
+      const push = min - d;
+      const nx = dx / d;
+      const ny = dy / d;
+      let nextX = x + nx * push;
+      let nextY = y + (ny > 0 ? ny * push : 0);
+      const clampedX = Math.max(-limit, Math.min(limit, nextX));
+      // A side wall ate the sideways push, so lift the shard instead of stacking it.
+      if (ny <= 0 && Math.abs(clampedX - x) < push * 0.55) nextY += push;
+      x = clampedX;
+      y = Math.max(parent.y, nextY);
+      const left = Math.hypot(x - o.x, y - o.y);
+      if (left < min) y += min - left;
     }
   }
   if (y < parent.y) y = parent.y;
-  const limit = PLAYFIELD_HALF * 2.2;
   x = Math.max(-limit, Math.min(limit, x));
   return { x, y, z: parent.z + offset.dz };
 }

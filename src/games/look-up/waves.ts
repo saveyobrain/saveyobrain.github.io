@@ -96,3 +96,22 @@ export function spawnValues(cfg: WaveConfig, rng: Rng): number[] {
 export function shouldSpawnBonus(cfg: WaveConfig, rng: Rng): boolean {
   return cfg.bonusChance > 0 && rng.chance(cfg.bonusChance);
 }
+
+/**
+ * Most lives the player may hold on this wave.
+ * 1–3 → 3, 4–6 → 4, 7–9 → 5, then round(level / 2).
+ */
+export function lifeCap(wave: number): number {
+  const lvl = Math.max(1, Math.floor(wave));
+  if (lvl <= 3) return 3;
+  if (lvl <= 6) return 4;
+  if (lvl <= 9) return 5;
+  return Math.max(5, Math.round(lvl / 2));
+}
+
+/** Asteroids in play. A seventh hazard is not released until some are gone. */
+export const HAZARD_CAP = 6;
+
+export function hazardSpawnBlocked(onScreen: number): boolean {
+  return onScreen >= HAZARD_CAP;
+}

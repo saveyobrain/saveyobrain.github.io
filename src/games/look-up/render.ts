@@ -34,7 +34,11 @@ export {
   type PlayFrustum,
 } from "./spawn";
 
-export type BodyKind = "asteroid" | "bonus";
+export type BodyKind = "asteroid" | "shield" | "life";
+
+function isPickup(kind: BodyKind): boolean {
+  return kind === "shield" || kind === "life";
+}
 
 export interface BodyVisual {
   id: string;
@@ -467,7 +471,11 @@ export class SpaceView {
     let root: Mesh;
     let baseDiffuse: Color3;
     let baseEmissive: Color3;
-    if (kind === "bonus") {
+    if (kind === "life") {
+      root = CreateSphere(`body-${id}`, { diameter: 1.15, segments: 12 }, this.scene);
+      baseDiffuse = new Color3(0.95, 0.35, 0.42);
+      baseEmissive = new Color3(0.55, 0.1, 0.16);
+    } else if (kind === "shield") {
       root = CreateSphere(`body-${id}`, { diameter: 1.15, segments: 12 }, this.scene);
       baseDiffuse = new Color3(0.25, 0.95, 0.7);
       baseEmissive = new Color3(0.15, 0.45, 0.3);
@@ -480,7 +488,7 @@ export class SpaceView {
     const mat = new StandardMaterial(`bodyMat-${id}`, this.scene);
     mat.diffuseColor = baseDiffuse.clone();
     mat.emissiveColor = baseEmissive.clone();
-    mat.specularColor = kind === "bonus" ? new Color3(0.3, 0.4, 0.35) : new Color3(0.12, 0.1, 0.08);
+    mat.specularColor = isPickup(kind) ? new Color3(0.3, 0.4, 0.35) : new Color3(0.12, 0.1, 0.08);
     root.material = mat;
 
     // World-space badge. Parenting it to the tumbling rock swung the number behind the mesh.
@@ -515,17 +523,24 @@ export class SpaceView {
     ctx.clearRect(0, 0, s, s);
     ctx.beginPath();
     ctx.arc(c, c, s * 0.42, 0, Math.PI * 2);
-    if (body.kind === "bonus") {
-      ctx.fillStyle = selected ? "rgba(120, 255, 210, 0.96)" : "rgba(4, 28, 22, 0.94)";
+    if (body.kind === "shield" || body.kind === "life") {
+      const life = body.kind === "life";
+      ctx.fillStyle = selected
+        ? life
+          ? "rgba(255, 186, 196, 0.97)"
+          : "rgba(120, 255, 210, 0.96)"
+        : life
+          ? "rgba(42, 10, 16, 0.94)"
+          : "rgba(4, 28, 22, 0.94)";
       ctx.fill();
       ctx.lineWidth = 10;
-      ctx.strokeStyle = "#b8ffe4";
+      ctx.strokeStyle = life ? "#ffd0d8" : "#b8ffe4";
       ctx.stroke();
-      ctx.fillStyle = selected ? "#063328" : "#f4fffb";
+      ctx.fillStyle = selected ? (life ? "#4a1020" : "#063328") : "#f4fffb";
       ctx.font = "500 104px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("\u{1F6E1}", c, c + 4);
+      ctx.fillText(life ? "\u2665" : "\u{1F6E1}", c, c + 4);
     } else {
       const text = String(label);
       ctx.fillStyle = selected ? "rgba(255, 214, 96, 0.97)" : "rgba(6, 12, 28, 0.94)";
@@ -561,7 +576,7 @@ export class SpaceView {
         mesh.root.rotation.z = this.time * 0.25;
       }
       const scale = b.burning ? 0.2 + (1 - (b.hitFlash ?? 0)) * 0.5 : 1 + (b.selected ? 0.12 : 0);
-      const bodyScale = scale * (b.kind === "bonus" ? 0.9 : 1);
+      const bodyScale = scale * (isPickup(b.kind) ? 0.9 : 1);
       mesh.root.scaling.setAll(bodyScale);
       // Upright badge centered on the rock, a touch toward the camera.
       mesh.labelPlane.position.set(b.x, b.y, b.z - 0.45);
@@ -582,6 +597,9 @@ export class SpaceView {
               mesh.baseEmissive.g + flash * 0.25,
               mesh.baseEmissive.b + flash * 0.1,
             );
+      } else if (b.kind === "life") {
+        const pulse = 0.45 + Math.sin(this.time * 4) * 0.2;
+        mat.emissiveColor = new Color3(pulse, 0.12, 0.16);
       } else {
         mat.emissiveColor = new Color3(0.15, 0.55 + Math.sin(this.time * 4) * 0.15, 0.35);
       }

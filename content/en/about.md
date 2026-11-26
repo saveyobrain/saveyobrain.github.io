@@ -7,7 +7,9 @@ description: Save Yo Brain is a free web resource that helps people practise bas
 
 **Save Yo Brain** is a free web resource made to help children — and anyone else — build and keep their basic math and times tables skills.
 
-Basic math is a life skill, as important as reading and writing. Like any skill, it fades when it isn't used. These games turn short bursts of mental math into something simple and friendly, so you can practise a little every day. Try **Save the Light** for times-table mazes, or **Look UP** to practise divisors while defending a station.
+Basic math is a life skill, as important as reading and writing. Like any skill, it fades when it isn't used. These games turn short bursts of mental math into something simple and friendly, so you can practise a little every day. Try **Save the Light** for times-table mazes, or **Look UP**. Protect the space station: fire proper divisors to break asteroids.
+
+<!-- Later, if enemies are added: "…break asteroids and enemies." -->
 
 ## What we believe
 

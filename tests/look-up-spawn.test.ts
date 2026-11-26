@@ -3,6 +3,7 @@ import { createRng } from "../src/core/math/rng";
 import {
   FRUSTUM_MARGIN,
   MIN_SEPARATION,
+  SPLIT_SEPARATION,
   barrelPitch,
   frustumAtPlane,
   isInsideFrustum,
@@ -65,6 +66,35 @@ describe("look-up spawn", () => {
         expect(Math.hypot(shards[i].x - shards[j].x, shards[i].y - shards[j].y)).toBeGreaterThanOrEqual(
           MIN_SEPARATION - 0.05,
         );
+      }
+    }
+  });
+
+  it("keeps a 36 split by 3, 4, or 6 from stacking", () => {
+    // 36 ÷ 3, 36 ÷ 4, and 36 ÷ 6 are the overlaps that matter: 3, 4, or 6 shards, not 12.
+    for (const count of [3, 4, 6]) {
+      for (const seed of [1, 4, 9, 12]) {
+        for (const parent of [
+          { x: 0, y: 8, z: 0 },
+          { x: 4.2, y: 7, z: 0 },
+          { x: -4.2, y: 9, z: 0 },
+        ]) {
+          const ring = splitRingOffsets(count, createRng(seed + count * 10));
+          const placed: { x: number; y: number }[] = [{ x: parent.x, y: parent.y }];
+          const shards = ring.map((off) => {
+            const p = placeAroundBreak(parent, off, placed);
+            placed.push(p);
+            return p;
+          });
+          for (const p of shards) expect(p.y).toBeGreaterThanOrEqual(parent.y);
+          for (let i = 0; i < shards.length; i++) {
+            for (let j = i + 1; j < shards.length; j++) {
+              expect(Math.hypot(shards[i].x - shards[j].x, shards[i].y - shards[j].y)).toBeGreaterThanOrEqual(
+                SPLIT_SEPARATION - 0.05,
+              );
+            }
+          }
+        }
       }
     }
   });

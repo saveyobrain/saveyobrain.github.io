@@ -30,7 +30,7 @@ export function createTaskPanel(onPick: (index: number) => void): TaskPanel {
           "button",
           { class: "task-option", type: "button" },
           h("span", { class: "task-key" }, String(i + 1)),
-          h("span", { class: "task-value" }, String(value)),
+          h("span", { class: "task-value" }, task.labels?.[i] ?? String(value)),
         );
         btn.addEventListener("click", () => {
           btn.blur();
