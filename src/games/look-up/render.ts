@@ -43,6 +43,26 @@ function isPickup(kind: BodyKind): boolean {
   return kind === "shield" || kind === "life";
 }
 
+/** Heart silhouette. The dividend sits in the bowl, below the cleft. */
+function traceHeart(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + s * 0.46);
+  ctx.bezierCurveTo(cx - s * 1.05, cy + s * 0.02, cx - s * 0.62, cy - s * 0.72, cx, cy - s * 0.22);
+  ctx.bezierCurveTo(cx + s * 0.62, cy - s * 0.72, cx + s * 1.05, cy + s * 0.02, cx, cy + s * 0.46);
+  ctx.closePath();
+}
+
+/** Heater shield. The dividend sits in the face, above the point. */
+function traceShield(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.62, cy - s * 0.28);
+  ctx.quadraticCurveTo(cx, cy - s * 0.78, cx + s * 0.62, cy - s * 0.28);
+  ctx.lineTo(cx + s * 0.62, cy + s * 0.08);
+  ctx.quadraticCurveTo(cx + s * 0.48, cy + s * 0.5, cx, cy + s * 0.74);
+  ctx.quadraticCurveTo(cx - s * 0.48, cy + s * 0.5, cx - s * 0.62, cy + s * 0.08);
+  ctx.closePath();
+}
+
 export interface BodyVisual {
   id: string;
   kind: BodyKind;
@@ -493,6 +513,8 @@ export class SpaceView {
     mat.emissiveColor = baseEmissive.clone();
     mat.specularColor = isPickup(kind) ? new Color3(0.3, 0.4, 0.35) : new Color3(0.12, 0.1, 0.08);
     root.material = mat;
+    // The pickup is the heart or shield billboard, not a ball behind it.
+    if (isPickup(kind)) root.isVisible = false;
 
     // World-space badge. Parenting it to the tumbling rock swung the number behind the mesh.
     const labelPlane = CreatePlane(`label-${id}`, { size: 1.35 }, this.scene);
@@ -524,30 +546,33 @@ export class SpaceView {
     const s = LABEL_PX;
     const c = s / 2;
     ctx.clearRect(0, 0, s, s);
-    ctx.beginPath();
-    ctx.arc(c, c, s * 0.42, 0, Math.PI * 2);
     if (body.kind === "shield" || body.kind === "life") {
       const life = body.kind === "life";
       const text = String(label);
-      ctx.fillStyle = selected
-        ? "rgba(255, 214, 96, 0.97)"
-        : life
-          ? "rgba(42, 10, 16, 0.94)"
-          : "rgba(4, 28, 22, 0.94)";
+      const shape = s * 0.42;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      if (life) traceHeart(ctx, c, c + 6, shape);
+      else traceShield(ctx, c, c, shape);
+      ctx.fillStyle = life ? "#ff3b55" : "#2ad4a2";
       ctx.fill();
-      ctx.lineWidth = 10;
-      ctx.strokeStyle = life ? "#ffd0d8" : "#b8ffe4";
+      ctx.lineWidth = selected ? 16 : 12;
+      ctx.strokeStyle = selected ? "#ffe7a3" : life ? "#ffd5de" : "#e7fff6";
       ctx.stroke();
-      const fontPx = text.length >= 3 ? 78 : text.length === 1 ? 118 : 100;
+      const fontPx = text.length >= 3 ? 64 : text.length === 1 ? 96 : 80;
       ctx.font = `400 ${fontPx}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = selected ? "#1a1408" : life ? "#2a0810" : "#021810";
-      ctx.strokeText(text, c, c + 4);
-      ctx.fillStyle = selected ? "#1a1408" : "#ffffff";
-      ctx.fillText(text, c, c + 4);
+      // Sit in the body of the shape: below a heart's cleft, above a shield's point.
+      const textY = life ? c + shape * 0.08 : c - shape * 0.02;
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = life ? "#4a1020" : "#04382c";
+      ctx.strokeText(text, c, textY);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(text, c, textY);
     } else {
+      ctx.beginPath();
+      ctx.arc(c, c, s * 0.42, 0, Math.PI * 2);
       const text = String(label);
       ctx.fillStyle = selected ? "rgba(255, 214, 96, 0.97)" : "rgba(6, 12, 28, 0.94)";
       ctx.fill();
@@ -585,8 +610,9 @@ export class SpaceView {
       const bodyScale = scale * (isPickup(b.kind) ? 0.9 : 1);
       mesh.root.scaling.setAll(bodyScale);
       // Upright badge centered on the rock, a touch toward the camera.
+      // Pickup icons are larger so the heart or shield reads at a glance.
       mesh.labelPlane.position.set(b.x, b.y, b.z - 0.45);
-      mesh.labelPlane.scaling.setAll(bodyScale);
+      mesh.labelPlane.scaling.setAll(bodyScale * (isPickup(b.kind) ? 1.55 : 1));
       const selected = !!b.selected;
       if (mesh.label !== b.label || mesh.selected !== selected) {
         this.paintLabel(mesh, b.label, selected);
