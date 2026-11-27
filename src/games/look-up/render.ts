@@ -43,12 +43,12 @@ function isPickup(kind: BodyKind): boolean {
   return kind === "shield" || kind === "life";
 }
 
-/** Heart silhouette. The dividend sits in the bowl, below the cleft. */
+/** Heart silhouette, taller than it is wide. The dividend sits in the bowl. */
 function traceHeart(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
   ctx.beginPath();
-  ctx.moveTo(cx, cy + s * 0.46);
-  ctx.bezierCurveTo(cx - s * 1.05, cy + s * 0.02, cx - s * 0.62, cy - s * 0.72, cx, cy - s * 0.22);
-  ctx.bezierCurveTo(cx + s * 0.62, cy - s * 0.72, cx + s * 1.05, cy + s * 0.02, cx, cy + s * 0.46);
+  ctx.moveTo(cx, cy + s * 0.82);
+  ctx.bezierCurveTo(cx - s * 0.9, cy + s * 0.2, cx - s * 0.46, cy - s * 0.92, cx, cy - s * 0.4);
+  ctx.bezierCurveTo(cx + s * 0.46, cy - s * 0.92, cx + s * 0.9, cy + s * 0.2, cx, cy + s * 0.82);
   ctx.closePath();
 }
 
@@ -549,10 +549,10 @@ export class SpaceView {
     if (body.kind === "shield" || body.kind === "life") {
       const life = body.kind === "life";
       const text = String(label);
-      const shape = s * 0.42;
+      const shape = s * (life ? 0.46 : 0.42);
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
-      if (life) traceHeart(ctx, c, c + 6, shape);
+      if (life) traceHeart(ctx, c, c, shape);
       else traceShield(ctx, c, c, shape);
       ctx.fillStyle = life ? "#ff3b55" : "#2ad4a2";
       ctx.fill();
@@ -563,8 +563,8 @@ export class SpaceView {
       ctx.font = `400 ${fontPx}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      // Sit in the body of the shape: below a heart's cleft, above a shield's point.
-      const textY = life ? c + shape * 0.08 : c - shape * 0.02;
+      // Heart digit sits in the bowl. Shield digit sits on the face, under the wide top.
+      const textY = life ? c + shape * 0.06 : c + shape * 0.1;
       ctx.lineWidth = 5;
       ctx.strokeStyle = life ? "#4a1020" : "#04382c";
       ctx.strokeText(text, c, textY);
@@ -612,7 +612,8 @@ export class SpaceView {
       // Upright badge centered on the rock, a touch toward the camera.
       // Pickup icons are larger so the heart or shield reads at a glance.
       mesh.labelPlane.position.set(b.x, b.y, b.z - 0.45);
-      mesh.labelPlane.scaling.setAll(bodyScale * (isPickup(b.kind) ? 1.55 : 1));
+      const iconScale = b.kind === "life" ? 1.82 : b.kind === "shield" ? 1.55 : 1;
+      mesh.labelPlane.scaling.setAll(bodyScale * iconScale);
       const selected = !!b.selected;
       if (mesh.label !== b.label || mesh.selected !== selected) {
         this.paintLabel(mesh, b.label, selected);
