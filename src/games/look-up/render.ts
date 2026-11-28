@@ -43,12 +43,12 @@ function isPickup(kind: BodyKind): boolean {
   return kind === "shield" || kind === "life";
 }
 
-/** Heart silhouette, a little taller than it is wide. The dividend sits in the bowl. */
+/** Heart silhouette, just taller than it is wide. The dividend sits in the bowl. */
 function traceHeart(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
   ctx.beginPath();
-  ctx.moveTo(cx, cy + s * 0.718);
-  ctx.bezierCurveTo(cx - s * 0.9, cy + s * 0.175, cx - s * 0.46, cy - s * 0.805, cx, cy - s * 0.35);
-  ctx.bezierCurveTo(cx + s * 0.46, cy - s * 0.805, cx + s * 0.9, cy + s * 0.175, cx, cy + s * 0.718);
+  ctx.moveTo(cx, cy + s * 0.646);
+  ctx.bezierCurveTo(cx - s * 0.9, cy + s * 0.158, cx - s * 0.46, cy - s * 0.725, cx, cy - s * 0.315);
+  ctx.bezierCurveTo(cx + s * 0.46, cy - s * 0.725, cx + s * 0.9, cy + s * 0.158, cx, cy + s * 0.646);
   ctx.closePath();
 }
 
@@ -564,7 +564,7 @@ export class SpaceView {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       // Heart digit sits in the bowl. Shield digit sits on the face, under the wide top.
-      const textY = life ? c + shape * 0.05 : c + shape * 0.1;
+      const textY = life ? c + shape * 0.045 : c + shape * 0.1;
       ctx.lineWidth = 5;
       ctx.strokeStyle = life ? "#4a1020" : "#04382c";
       ctx.strokeText(text, c, textY);
