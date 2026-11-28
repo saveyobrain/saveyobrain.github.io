@@ -10,6 +10,7 @@ import {
   isValidSplit,
   leavesShards,
   pickComposite,
+  pickupReward,
   splitDivisors,
 } from "../src/games/look-up/math";
 
@@ -105,6 +106,13 @@ describe("look-up math", () => {
       expect(n).toBeGreaterThanOrEqual(4);
       expect(n).toBeLessThanOrEqual(40);
     }
+  });
+
+  it("grants a shield always and a life only under the cap", () => {
+    expect(pickupReward("shield", 2, 3)).toEqual({ lives: 2, shields: 1, score: 25 });
+    expect(pickupReward("shield", 3, 3)).toEqual({ lives: 3, shields: 1, score: 25 });
+    expect(pickupReward("life", 2, 3)).toEqual({ lives: 3, shields: 0, score: 15 });
+    expect(pickupReward("life", 3, 3)).toEqual({ lives: 3, shields: 0, score: 0 });
   });
 
   it("lets odd composites keep splitting until primes burn", () => {

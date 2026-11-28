@@ -142,6 +142,21 @@ export function choiceOptions(n: number, count: number, rng: Rng): number[] {
   return rng.shuffle(options.slice(0, count));
 }
 
+/**
+ * What collecting a life or shield adds.
+ * A shield always counts. A life at the cap is removed and adds nothing.
+ * No split score: that is only for a solved asteroid.
+ */
+export function pickupReward(
+  kind: "life" | "shield",
+  lives: number,
+  maxLives: number,
+): { lives: number; shields: number; score: number } {
+  if (kind === "shield") return { lives, shields: 1, score: 25 };
+  if (lives < maxLives) return { lives: lives + 1, shields: 0, score: 15 };
+  return { lives, shields: 0, score: 0 };
+}
+
 /** Spawn values that have a clean break and at least one shard-leaving split. */
 export function pickComposite(rng: Rng, min: number, max: number): number {
   const lo = Math.max(4, min);

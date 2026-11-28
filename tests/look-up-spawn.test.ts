@@ -104,6 +104,28 @@ describe("look-up spawn", () => {
     }
   });
 
+  it("keeps a clean-break burst of primes next to the parent", () => {
+    // 12 burning children (24 ÷ 12). They die in a fraction of a second, so they
+    // use a tight ring instead of the shard separation that would park them off screen.
+    for (const parent of [
+      { x: 0, y: 6, z: 0 },
+      { x: 3.5, y: 8, z: 0 },
+      { x: -3.5, y: 5, z: 0 },
+    ]) {
+      const ring = splitRingOffsets(12, createRng(4), 2.5);
+      const placed: { x: number; y: number }[] = [{ x: parent.x, y: parent.y }];
+      const shards = ring.map((off) => {
+        const p = placeAroundBreak(parent, off, placed, 1.2);
+        placed.push(p);
+        return p;
+      });
+      for (const p of shards) {
+        expect(p.y).toBeGreaterThanOrEqual(parent.y);
+        expect(Math.hypot(p.x - parent.x, p.y - parent.y)).toBeLessThan(7.5);
+      }
+    }
+  });
+
   it("does not drop a new approach on top of a rock already in play", () => {
     const frustum = frustumAtPlane(CAMERA.distance, CAMERA.fov, 1.6, CAMERA.centerY);
     const occupied = [

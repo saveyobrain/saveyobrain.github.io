@@ -21,6 +21,7 @@ import {
   burnsHarmlessly,
   choiceOptions,
   pickComposite,
+  pickupReward,
   splitDivisors,
   splitScore,
 } from "./math";
@@ -382,7 +383,10 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     panel.show(task);
     const playable = state === "playing" && feedbackTimer <= 0;
     setPanelEnabled(playable);
-    if (playable && typedAnswer()) entryInput.focus({ preventScroll: true });
+    // Refocusing an already-focused field every retarget stutters, especially on Hardcore.
+    if (playable && typedAnswer() && document.activeElement !== entryInput) {
+      entryInput.focus({ preventScroll: true });
+    }
   }
 
   function spawnWave(): void {
@@ -549,12 +553,16 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         body.burning = true;
         body.burnTimer = BURN_LIFE * 0.35;
         const children = result.children;
-        const ring = splitRingOffsets(children.length, rng);
+        // A clean break is the large divisor, so it can spawn a dozen primes.
+        // The shard ring would throw them above the view, and they burn before
+        // they fall back in. Keep that burst next to the parent.
+        const burnBurst = children.every((label) => burnsHarmlessly(label));
+        const ring = splitRingOffsets(children.length, rng, burnBurst ? 2.5 : undefined);
         const placed = bodies.filter((b) => !b.burning).map((b) => ({ x: b.x, y: b.y }));
         placed.push({ x: body.x, y: body.y });
         children.forEach((label, i) => {
           const off = ring[i] ?? { dx: 0, dy: 1.4, dz: 0 };
-          const p = placeAroundBreak(body, off, placed);
+          const p = placeAroundBreak(body, off, placed, burnBurst ? 1.2 : undefined);
           placed.push({ x: p.x, y: p.y });
           const child: Body = {
             id: String(nextId++),
@@ -601,18 +609,19 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     feedbackTimer = correct ? FEEDBACK_OK : FEEDBACK_BAD;
   }
 
+  function grantPickup(kind: "life" | "shield"): void {
+    const grant = pickupReward(kind, lives, maxLives);
+    lives = grant.lives;
+    shields += grant.shields;
+    score += grant.score;
+  }
+
   function collectPickup(body: Body): void {
     if (body.collected) return;
     body.collected = true;
     body.burning = true;
     body.burnTimer = BURN_LIFE;
-    if (body.kind === "shield") {
-      shields += 1;
-      score += 25;
-    } else if (body.kind === "life" && lives < maxLives) {
-      lives += 1;
-      score += 15;
-    }
+    if (body.kind === "shield" || body.kind === "life") grantPickup(body.kind);
     syncHud();
     ensureLifePickup();
   }
@@ -621,7 +630,14 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     body.burning = true;
     body.burnTimer = BURN_LIFE * 0.5;
     if (body.kind === "shield" || body.kind === "life") {
-      // Reaching the deck without a divisor does not grant the life or shield.
+      // Landing on the station collects the pickup even without a divisor.
+      // A life already at the cap is not stored. No split score.
+      if (!body.collected) {
+        body.collected = true;
+        grantPickup(body.kind);
+        syncHud();
+        ensureLifePickup();
+      }
       return;
     }
     if (shields > 0) {
@@ -745,8 +761,11 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     const current = selectedBody();
     if (!current) {
       aimLock = false;
+      const prev = selectedId;
       pickDefaultTarget();
-      if (feedbackTimer <= 0) showTaskForSelection();
+      // A clean split leaves every child burning, so this branch runs until one
+      // is aimable. Rebuilding the panel every frame was a hitch on that crowd.
+      if (feedbackTimer <= 0 && selectedId !== prev) showTaskForSelection();
       return;
     }
     if (aimLock || feedbackTimer > 0) return;

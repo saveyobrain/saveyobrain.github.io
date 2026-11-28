@@ -88,12 +88,22 @@ export interface ShotVisual {
 interface BodyMesh {
   root: Mesh;
   labelPlane: Mesh;
-  texture: DynamicTexture;
+  /** Cache key of the shared number badge. Do not dispose that texture from one body. */
+  labelKey: string;
   label: number;
   kind: BodyKind;
   selected: boolean;
   baseDiffuse: Color3;
   baseEmissive: Color3;
+  /** Mutated in place for hit flash and pickup pulse. */
+  flashEmissive: Color3;
+}
+
+interface SharedLabel {
+  key: string;
+  texture: DynamicTexture;
+  material: StandardMaterial;
+  refs: number;
 }
 
 interface CannonRig {
@@ -119,6 +129,10 @@ const DECK_TILT = 0.14;
 /** Tier-1 plate: metal lip image v. Above this row the JPG is starfield. */
 const DECK_LIP_V = 0.2;
 const LABEL_PX = 256;
+/** Shared burn glow. One object, assigned by reference, so a crowd of shards does not allocate. */
+const BURN_EMISSIVE = new Color3(1, 0.55, 0.15);
+/** A clean break can spawn a dozen meshes. Build a few per frame so that spike stays small. */
+const NEW_MESHES_PER_FRAME = 4;
 
 function litMat(scene: Scene, name: string, diffuse: Color3, emissive: Color3, specular = 0.35): StandardMaterial {
   const m = new StandardMaterial(name, scene);
@@ -209,6 +223,8 @@ function planeUvToLocal(u: number, v: number, width: number, height: number): Ve
 export class SpaceView {
   readonly camera: TargetCamera;
   private readonly bodies = new Map<string, BodyMesh>();
+  /** Same kind + number + selection share one 256² upload. A clean break spawns many identical badges. */
+  private readonly labels = new Map<string, SharedLabel>();
   private readonly shots = new Map<string, Mesh>();
   private readonly cannons: CannonRig[] = [];
   private stationShield: Mesh | null = null;
@@ -489,7 +505,40 @@ export class SpaceView {
     }
   }
 
-  private makeBody(id: string, kind: BodyKind, label: number): BodyMesh {
+  private acquireLabel(kind: BodyKind, label: number, selected: boolean): SharedLabel {
+    const key = `${kind}-${label}-${selected ? 1 : 0}`;
+    let shared = this.labels.get(key);
+    if (!shared) {
+      const texture = new DynamicTexture(`labelTex-${key}`, { width: LABEL_PX, height: LABEL_PX }, this.scene, false);
+      texture.hasAlpha = true;
+      texture.updateSamplingMode(Texture.BILINEAR_SAMPLINGMODE);
+      const material = new StandardMaterial(`labelMat-${key}`, this.scene);
+      material.diffuseTexture = texture;
+      material.emissiveTexture = texture;
+      material.opacityTexture = texture;
+      material.useAlphaFromDiffuseTexture = true;
+      material.disableLighting = true;
+      material.disableDepthWrite = true;
+      material.backFaceCulling = false;
+      material.transparencyMode = Material.MATERIAL_ALPHABLEND;
+      this.paintLabel(texture, kind, label, selected);
+      shared = { key, texture, material, refs: 0 };
+      this.labels.set(key, shared);
+    }
+    shared.refs += 1;
+    return shared;
+  }
+
+  private releaseLabel(key: string): void {
+    const shared = this.labels.get(key);
+    if (!shared) return;
+    shared.refs -= 1;
+    if (shared.refs > 0) return;
+    this.labels.delete(key);
+    shared.material.dispose(false, true);
+  }
+
+  private makeBody(id: string, kind: BodyKind, label: number, burning: boolean): BodyMesh {
     const seed = [...id].reduce((a, c) => a + c.charCodeAt(0), label * 17);
     let root: Mesh;
     let baseDiffuse: Color3;
@@ -502,6 +551,13 @@ export class SpaceView {
       root = CreateSphere(`body-${id}`, { diameter: 1.15, segments: 12 }, this.scene);
       baseDiffuse = new Color3(0.25, 0.95, 0.7);
       baseEmissive = new Color3(0.15, 0.45, 0.3);
+    } else if (burning) {
+      // Born already burning (a clean break). They live ~0.55s, so skip the
+      // displaced flat-shaded rock. A coarse sphere is enough, and the shared
+      // badge still shows the number.
+      root = CreateSphere(`body-${id}`, { diameter: 1.7, segments: 4 }, this.scene);
+      baseDiffuse = new Color3(0.55, 0.28, 0.12);
+      baseEmissive = BURN_EMISSIVE;
     } else {
       root = createRockyMesh(this.scene, `body-${id}`, seed, 0.92);
       const palette = rockPalette(seed);
@@ -509,9 +565,10 @@ export class SpaceView {
       baseEmissive = palette.emissive;
     }
     const mat = new StandardMaterial(`bodyMat-${id}`, this.scene);
-    mat.diffuseColor = baseDiffuse.clone();
-    mat.emissiveColor = baseEmissive.clone();
+    mat.diffuseColor = baseDiffuse;
+    mat.emissiveColor = baseEmissive;
     mat.specularColor = isPickup(kind) ? new Color3(0.3, 0.4, 0.35) : new Color3(0.12, 0.1, 0.08);
+    if (kind === "asteroid" && burning) mat.backFaceCulling = false;
     root.material = mat;
     // The pickup is the heart or shield billboard, not a ball behind it.
     if (isPickup(kind)) root.isVisible = false;
@@ -521,33 +578,31 @@ export class SpaceView {
     labelPlane.billboardMode = Mesh.BILLBOARDMODE_ALL;
     labelPlane.renderingGroupId = 3;
     labelPlane.isPickable = true;
-    const texture = new DynamicTexture(`labelTex-${id}`, { width: LABEL_PX, height: LABEL_PX }, this.scene, false);
-    texture.hasAlpha = true;
-    texture.updateSamplingMode(Texture.BILINEAR_SAMPLINGMODE);
-    const labelMat = new StandardMaterial(`labelMat-${id}`, this.scene);
-    labelMat.diffuseTexture = texture;
-    labelMat.emissiveTexture = texture;
-    labelMat.opacityTexture = texture;
-    labelMat.useAlphaFromDiffuseTexture = true;
-    labelMat.disableLighting = true;
-    labelMat.disableDepthWrite = true;
-    labelMat.backFaceCulling = false;
-    labelMat.transparencyMode = Material.MATERIAL_ALPHABLEND;
-    labelPlane.material = labelMat;
+    const shared = this.acquireLabel(kind, label, false);
+    labelPlane.material = shared.material;
 
-    const body: BodyMesh = { root, labelPlane, texture, label, kind, selected: false, baseDiffuse, baseEmissive };
-    this.paintLabel(body, label, false);
+    const body: BodyMesh = {
+      root,
+      labelPlane,
+      labelKey: shared.key,
+      label,
+      kind,
+      selected: false,
+      baseDiffuse,
+      baseEmissive,
+      flashEmissive: new Color3(baseEmissive.r, baseEmissive.g, baseEmissive.b),
+    };
     this.bodies.set(id, body);
     return body;
   }
 
-  private paintLabel(body: BodyMesh, label: number, selected: boolean): void {
-    const ctx = body.texture.getContext() as unknown as CanvasRenderingContext2D;
+  private paintLabel(texture: DynamicTexture, kind: BodyKind, label: number, selected: boolean): void {
+    const ctx = texture.getContext() as unknown as CanvasRenderingContext2D;
     const s = LABEL_PX;
     const c = s / 2;
     ctx.clearRect(0, 0, s, s);
-    if (body.kind === "shield" || body.kind === "life") {
-      const life = body.kind === "life";
+    if (kind === "shield" || kind === "life") {
+      const life = kind === "life";
       const text = String(label);
       const shape = s * (life ? 0.46 : 0.42);
       ctx.lineJoin = "round";
@@ -591,16 +646,25 @@ export class SpaceView {
       ctx.fillStyle = selected ? "#1a1408" : "#ffffff";
       ctx.fillText(text, c, c + 4);
     }
-    body.texture.update();
-    body.label = label;
+    texture.update();
   }
 
   syncBodies(list: readonly BodyVisual[]): void {
     const seen = new Set<string>();
+    const fresh = list.filter((b) => !this.bodies.has(b.id));
+    fresh.sort((a, b) => Number(!!b.selected) - Number(!!a.selected));
+    const createNow = new Set<string>();
+    for (const b of fresh) {
+      if (createNow.size >= NEW_MESHES_PER_FRAME && !b.selected) break;
+      createNow.add(b.id);
+    }
     for (const b of list) {
       seen.add(b.id);
       let mesh = this.bodies.get(b.id);
-      if (!mesh) mesh = this.makeBody(b.id, b.kind, b.label);
+      if (!mesh) {
+        if (!createNow.has(b.id)) continue;
+        mesh = this.makeBody(b.id, b.kind, b.label, !!b.burning);
+      }
       mesh.root.position.set(b.x, b.y, b.z);
       // Slow tumble so rocks feel irregular, not floating balls.
       if (b.kind === "asteroid" && !b.burning) {
@@ -618,32 +682,45 @@ export class SpaceView {
       mesh.labelPlane.scaling.setAll(bodyScale * iconScale);
       const selected = !!b.selected;
       if (mesh.label !== b.label || mesh.selected !== selected) {
-        this.paintLabel(mesh, b.label, selected);
+        const prevKey = mesh.labelKey;
+        const shared = this.acquireLabel(b.kind, b.label, selected);
+        mesh.labelPlane.material = shared.material;
+        mesh.labelKey = shared.key;
+        mesh.label = b.label;
         mesh.selected = selected;
+        this.releaseLabel(prevKey);
       }
       const mat = mesh.root.material as StandardMaterial;
+      if (mat.diffuseColor !== mesh.baseDiffuse) mat.diffuseColor = mesh.baseDiffuse;
       if (b.kind === "asteroid") {
         const flash = b.hitFlash ?? 0;
-        mat.diffuseColor = mesh.baseDiffuse;
-        mat.emissiveColor = b.burning
-          ? new Color3(1, 0.55, 0.15)
-          : new Color3(
-              mesh.baseEmissive.r + flash * 0.55,
-              mesh.baseEmissive.g + flash * 0.25,
-              mesh.baseEmissive.b + flash * 0.1,
-            );
+        if (b.burning) {
+          if (mat.emissiveColor !== BURN_EMISSIVE) mat.emissiveColor = BURN_EMISSIVE;
+        } else if (flash > 0.001) {
+          mesh.flashEmissive.set(
+            mesh.baseEmissive.r + flash * 0.55,
+            mesh.baseEmissive.g + flash * 0.25,
+            mesh.baseEmissive.b + flash * 0.1,
+          );
+          if (mat.emissiveColor !== mesh.flashEmissive) mat.emissiveColor = mesh.flashEmissive;
+        } else if (mat.emissiveColor !== mesh.baseEmissive) {
+          mat.emissiveColor = mesh.baseEmissive;
+        }
       } else if (b.kind === "life") {
         const pulse = 0.45 + Math.sin(this.time * 4) * 0.2;
-        mat.emissiveColor = new Color3(pulse, 0.12, 0.16);
+        mesh.flashEmissive.set(pulse, 0.12, 0.16);
+        if (mat.emissiveColor !== mesh.flashEmissive) mat.emissiveColor = mesh.flashEmissive;
       } else {
-        mat.emissiveColor = new Color3(0.15, 0.55 + Math.sin(this.time * 4) * 0.15, 0.35);
+        mesh.flashEmissive.set(0.15, 0.55 + Math.sin(this.time * 4) * 0.15, 0.35);
+        if (mat.emissiveColor !== mesh.flashEmissive) mat.emissiveColor = mesh.flashEmissive;
       }
     }
     for (const [id, mesh] of this.bodies) {
       if (seen.has(id)) continue;
-      mesh.root.dispose();
-      mesh.labelPlane.dispose();
-      mesh.texture.dispose();
+      mesh.root.dispose(false, true);
+      mesh.labelPlane.material = null;
+      mesh.labelPlane.dispose(false, false);
+      this.releaseLabel(mesh.labelKey);
       this.bodies.delete(id);
     }
   }

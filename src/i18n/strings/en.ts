@@ -104,7 +104,7 @@ export const en: Strings = {
     description: "Protect the space station. Pick correct divisors. Break asteroids.",
     introGoal: "Numbered asteroids fall toward your space station. Split them with the cannons before they hit the deck.",
     introRules:
-      "Pick a proper divisor D of N (not 1, not N). A hit splits the rock into D pieces labeled N\u00f7D. Odd primes burn safely. Wrong picks ricochet. Shields and lives are numbered too: a proper divisor collects them.",
+      "Pick a proper divisor D of N (not 1, not N). A hit splits the rock into D pieces labeled N\u00f7D. Odd primes burn safely. Wrong picks ricochet. Shields and lives are numbered too: a proper divisor collects them, and so does landing on the station.",
     controls:
       "Target: closest rock is auto-selected (tap a rock, shield, or life, or use arrows). Answer: keys 1-4 or tap. A correct divisor splits a rock or collects a shield or life. Menu: Esc.",
     controlsEntry:
