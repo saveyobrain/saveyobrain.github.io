@@ -43,7 +43,7 @@ function isPickup(kind: BodyKind): boolean {
   return kind === "shield" || kind === "life";
 }
 
-/** Heart silhouette, just taller than it is wide. The dividend sits in the bowl. */
+/** Heart silhouette, just taller than it is wide. The dividend sits in the middle. */
 function traceHeart(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
   ctx.beginPath();
   ctx.moveTo(cx, cy + s * 0.646);
@@ -563,8 +563,10 @@ export class SpaceView {
       ctx.font = `400 ${fontPx}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      // Heart digit sits in the bowl. Shield digit sits on the face, under the wide top.
-      const textY = life ? c + shape * 0.045 : c + shape * 0.1;
+      // Heart digit is centered on the silhouette. Canvas "middle" draws the
+      // ink a little high, so the anchor sits below the heart's midpoint.
+      // Shield digit sits on the face, under the wide top.
+      const textY = life ? c + shape * 0.106 + fontPx * 0.078 : c + shape * 0.1;
       ctx.lineWidth = 5;
       ctx.strokeStyle = life ? "#4a1020" : "#04382c";
       ctx.strokeText(text, c, textY);
