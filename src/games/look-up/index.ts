@@ -36,6 +36,7 @@ import {
   type ShotVisual,
 } from "./render";
 import {
+  answerMode,
   hazardSpawnBlocked,
   lifeCap,
   shouldSpawnBonus,
@@ -143,7 +144,49 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   stage.append(hud.el);
 
   const panel = createTaskPanel((i) => answer(i));
+  const entryInput = h("input", {
+    class: "lup-divisor",
+    type: "text",
+    inputmode: "numeric",
+    autocomplete: "off",
+    enterkeyhint: "done",
+    maxlength: "6",
+    "aria-label": t.divisorLabel,
+  });
+  const fireBtn = h("button", { class: "lup-fire", type: "button" }, t.fire);
+  const entryForm = h("form", { class: "lup-entry" }, entryInput, fireBtn);
+  panel.el.append(entryForm);
   ctx.root.append(panel.el);
+  entryForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    submitEntry();
+  });
+  fireBtn.addEventListener("click", () => {
+    fireBtn.blur();
+    submitEntry();
+  });
+  entryInput.addEventListener("input", () => {
+    const digits = entryInput.value.replace(/\D/g, "").slice(0, 6);
+    if (digits !== entryInput.value) entryInput.value = digits;
+    entryForm.classList.remove("is-wrong", "is-correct");
+  });
+
+  function typedAnswer(): boolean {
+    return answerMode(difficulty) === "entry";
+  }
+
+  function setPanelEnabled(enabled: boolean): void {
+    panel.setEnabled(enabled);
+    const entryOn = enabled && typedAnswer();
+    entryInput.disabled = !entryOn;
+    fireBtn.disabled = !entryOn;
+  }
+
+  function syncEntry(): void {
+    const entry = typedAnswer();
+    entryForm.classList.toggle("is-open", entry);
+    panel.el.classList.toggle("lup-entry-mode", entry);
+  }
 
   function openModal(options: Parameters<typeof showModal>[1]): void {
     modal?.close();
@@ -301,28 +344,45 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function showTaskForSelection(): void {
+    syncEntry();
     const body = selectedBody();
     if (!body) {
       task = undefined;
+      taskForId = null;
       panel.el.classList.add("lup-idle");
-      panel.show({ kind: "div", text: t.pickTarget, answer: -1, options: [2, 3, 4, 5] });
-      panel.setEnabled(false);
+      entryForm.classList.remove("is-wrong", "is-correct");
+      entryInput.value = "";
+      panel.show({
+        kind: "div",
+        text: t.pickTarget,
+        answer: -1,
+        options: typedAnswer() ? [] : [2, 3, 4, 5],
+      });
+      setPanelEnabled(false);
       return;
     }
     panel.el.classList.remove("lup-idle");
     if (!(task && taskForId === body.id)) {
       taskForId = body.id;
-      const options = choiceOptions(body.label, CHOICE_COUNT, rng);
-      // answer field unused for validation — we check isValidSplit on pick.
-      task = {
-        kind: "div",
-        text: promptFor(body),
-        answer: options.find((d) => splitDivisors(body.label).includes(d)) ?? options[0],
-        options,
-      };
+      entryForm.classList.remove("is-wrong", "is-correct");
+      entryInput.value = "";
+      if (typedAnswer()) {
+        task = { kind: "div", text: promptFor(body), answer: -1, options: [] };
+      } else {
+        const options = choiceOptions(body.label, CHOICE_COUNT, rng);
+        // answer field unused for validation — we check isValidSplit on pick.
+        task = {
+          kind: "div",
+          text: promptFor(body),
+          answer: options.find((d) => splitDivisors(body.label).includes(d)) ?? options[0],
+          options,
+        };
+      }
     }
     panel.show(task);
-    panel.setEnabled(state === "playing" && feedbackTimer <= 0);
+    const playable = state === "playing" && feedbackTimer <= 0;
+    setPanelEnabled(playable);
+    if (playable && typedAnswer()) entryInput.focus({ preventScroll: true });
   }
 
   function spawnWave(): void {
@@ -363,7 +423,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     syncHud();
     spawnWave();
     state = "intro";
-    panel.setEnabled(false);
+    setPanelEnabled(false);
     if (withIntro) showIntro();
     else play();
   }
@@ -374,7 +434,9 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
       t.introGoal,
       t.introRules,
     ];
-    if (wave === 1 || !sessionStorage.getItem("lup-controls-seen")) lines.push(t.controls);
+    if (wave === 1 || !sessionStorage.getItem("lup-controls-seen")) {
+      lines.push(typedAnswer() ? t.controlsEntry : t.controls);
+    }
     sessionStorage.setItem("lup-controls-seen", "1");
     openModal({
       title: t.wave(wave),
@@ -416,7 +478,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
     const starting = state === "intro" || state === "waveClear";
     closeModal();
     state = "playing";
-    panel.setEnabled(feedbackTimer <= 0 && !!selectedBody());
+    setPanelEnabled(feedbackTimer <= 0 && !!selectedBody());
     showTaskForSelection();
     if (starting) track("game_start", { game_id: GAME_ID, level: wave, difficulty });
   }
@@ -424,7 +486,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   function togglePause(): void {
     if (state === "playing") {
       state = "paused";
-      panel.setEnabled(false);
+      setPanelEnabled(false);
       openModal({
         title: strings.menu,
         lines: [strings.paused, t.score(score), t.wave(wave)],
@@ -454,12 +516,24 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
   }
 
   function answer(index: number): void {
-    if (state !== "playing" || feedbackTimer > 0 || !task || index >= task.options.length) return;
+    if (typedAnswer() || !task || index >= task.options.length) return;
+    resolvePick(task.options[index], index);
+  }
+
+  function submitEntry(): void {
+    if (!typedAnswer() || state !== "playing" || feedbackTimer > 0) return;
+    const raw = entryInput.value.trim();
+    if (raw === "") return;
+    const pick = Number(raw);
+    resolvePick(Number.isInteger(pick) ? pick : -1, null);
+  }
+
+  /** optionIndex is the button that was tapped. Null means a typed Hardcore answer. */
+  function resolvePick(pick: number, optionIndex: number | null): void {
+    if (state !== "playing" || feedbackTimer > 0 || !task) return;
     const body = selectedBody();
     if (!body) return;
 
-    const pick = task.options[index];
-    const correctIndex = task.options.findIndex((d) => splitDivisors(body.label).includes(d));
     const result = applySplit(body.label, pick);
     const correct = result.ok;
     const pickup = body.kind === "shield" || body.kind === "life";
@@ -500,17 +574,30 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
           bodies.push(child);
         });
       }
-      panel.showResult(index, index);
+      if (optionIndex !== null) panel.showResult(optionIndex, optionIndex);
+      else {
+        entryForm.classList.remove("is-wrong");
+        entryForm.classList.add("is-correct");
+      }
     } else {
       fireShot(body, false);
       body.hitFlash = 1;
       // Keep this rock and these buttons. A miss must not reshuffle or retarget.
       aimLock = true;
-      panel.showResult(index, correctIndex >= 0 ? correctIndex : index);
+      if (optionIndex !== null) {
+        const correctIndex = task.options.findIndex((d) => splitDivisors(body.label).includes(d));
+        panel.showResult(optionIndex, correctIndex >= 0 ? correctIndex : optionIndex);
+      } else {
+        entryForm.classList.remove("is-correct");
+        entryForm.classList.add("is-wrong");
+        panel.el.classList.remove("shake");
+        void panel.el.offsetWidth;
+        panel.el.classList.add("shake");
+      }
     }
 
     syncHud();
-    panel.setEnabled(false);
+    setPanelEnabled(false);
     feedbackTimer = correct ? FEEDBACK_OK : FEEDBACK_BAD;
   }
 
@@ -550,7 +637,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
 
   function lose(): void {
     state = "lost";
-    panel.setEnabled(false);
+    setPanelEnabled(false);
     track("level_fail", { game_id: GAME_ID, level: wave, difficulty });
     openModal({
       title: t.stationHit,
@@ -565,7 +652,7 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
 
   function clearWave(): void {
     state = "waveClear";
-    panel.setEnabled(false);
+    setPanelEnabled(false);
     track("level_complete", { game_id: GAME_ID, level: wave, difficulty });
     updateProgress(GAME_ID, (p) => {
       p.difficulty = difficulty;
@@ -611,9 +698,10 @@ function start(ctx: GameContext, options: StartOptions): GameInstance {
         break;
       case "confirm":
         if (state !== "playing") modal?.confirm();
+        else if (typedAnswer()) submitEntry();
         break;
       case "answer":
-        answer(e.index);
+        if (!typedAnswer()) answer(e.index);
         break;
       case "move": {
         if (state !== "playing") break;

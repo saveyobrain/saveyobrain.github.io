@@ -89,6 +89,10 @@ export interface Strings {
     introGoal: string;
     introRules: string;
     controls: string;
+    /** Hardcore: type a divisor instead of picking 1–4. */
+    controlsEntry: string;
+    fire: string;
+    divisorLabel: string;
     wave: (n: number) => string;
     score: (n: number) => string;
     lives: (n: number, max: number) => string;

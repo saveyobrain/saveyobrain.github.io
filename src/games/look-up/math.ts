@@ -55,21 +55,57 @@ export function splitScore(n: number, d: number): number {
   return Math.max(1, d + Math.floor(Math.log2(Math.max(2, n))));
 }
 
+/** The pieces from this divisor all burn (each label is prime or 2). */
+export function clearsWithoutShards(n: number, d: number): boolean {
+  return isValidSplit(n, d) && burnsHarmlessly(n / d);
+}
+
+/** The pieces from this divisor are still composite, so shards remain. */
+export function leavesShards(n: number, d: number): boolean {
+  return isValidSplit(n, d) && !burnsHarmlessly(n / d);
+}
+
 /**
- * Build `count` multiple-choice options that always include every real split divisor
- * when there are ≤ count of them, plus decoys that do not divide N.
- * Never includes 1 or N.
+ * True when N has both a one-shot burn divisor and a divisor that leaves shards.
+ * Those are the numbers the choice buttons are built for.
+ */
+export function hasChoiceMix(n: number): boolean {
+  const real = splitDivisors(n);
+  return real.some((d) => burnsHarmlessly(n / d)) && real.some((d) => !burnsHarmlessly(n / d));
+}
+
+/**
+ * Four choices for Easy, Normal, and Hard: exactly one divisor that burns the
+ * pieces in one shot, one or two divisors that leave smaller shards, and one
+ * or two non-divisors. Never includes 1 or N.
+ *
+ * A number with no shard-leaving divisor still gets one clean break and the
+ * rest wrong, so the panel can fill. Spawns use `hasChoiceMix` and avoid that.
  */
 export function choiceOptions(n: number, count: number, rng: Rng): number[] {
   const real = splitDivisors(n);
-  if (real.length === 0 || count < 1) return [];
+  const clean = real.filter((d) => burnsHarmlessly(n / d));
+  const shards = real.filter((d) => !burnsHarmlessly(n / d));
+  if (clean.length === 0 || count < 1) return [];
 
-  const options = [...real];
-  const used = new Set(options);
-  used.add(1);
-  used.add(n);
+  const used = new Set<number>([1, n]);
+  const options: number[] = [];
+  const cleanPick = rng.pick(clean);
+  options.push(cleanPick);
+  used.add(cleanPick);
 
-  // Prefer plausible near-misses around the real divisors and around √n.
+  // Leave at least one slot for a wrong answer whenever the set has room.
+  const roomForShards = Math.max(0, count - 2);
+  let shardTake = 0;
+  if (shards.length > 0 && roomForShards > 0) {
+    const wantTwo = shards.length >= 2 && roomForShards >= 2 && rng.chance(0.5);
+    shardTake = Math.min(shards.length, wantTwo ? 2 : 1, roomForShards);
+  }
+  for (const d of rng.shuffle([...shards]).slice(0, shardTake)) {
+    options.push(d);
+    used.add(d);
+  }
+
   const decoyPool: number[] = [];
   for (const d of real) {
     for (const delta of [-2, -1, 1, 2, 3]) {
@@ -81,7 +117,7 @@ export function choiceOptions(n: number, count: number, rng: Rng): number[] {
   for (let v = root - 3; v <= root + 4; v++) {
     if (v > 1 && v < n && !used.has(v) && n % v !== 0) decoyPool.push(v);
   }
-  for (let v = 2; v < n && decoyPool.length < count * 4; v++) {
+  for (let v = 2; v < n && decoyPool.length < count * 6; v++) {
     if (!used.has(v) && n % v !== 0) decoyPool.push(v);
   }
 
@@ -92,32 +128,31 @@ export function choiceOptions(n: number, count: number, rng: Rng): number[] {
     used.add(decoy);
     options.push(decoy);
   }
-
-  // If still short (tiny N), pad with unused integers in (1, N), then nearby outsiders.
   for (let v = 2; v < n && options.length < count; v++) {
-    if (used.has(v)) continue;
+    if (used.has(v) || n % v === 0) continue;
     used.add(v);
     options.push(v);
   }
-  for (let v = n + 1; options.length < count && v < n + 20; v++) {
+  for (let v = n + 1; options.length < count && v < n + 24; v++) {
     if (used.has(v)) continue;
     used.add(v);
     options.push(v);
   }
 
-  return rng.shuffle(options.slice(0, Math.min(count, options.length)));
+  return rng.shuffle(options.slice(0, count));
 }
 
-/** Composite spawn values in [min, max] that still have at least one split divisor. */
+/** Spawn values that have a clean break and at least one shard-leaving split. */
 export function pickComposite(rng: Rng, min: number, max: number): number {
   const lo = Math.max(4, min);
   const hi = Math.max(lo, max);
-  for (let attempt = 0; attempt < 40; attempt++) {
+  for (let attempt = 0; attempt < 80; attempt++) {
     const n = rng.int(lo, hi);
-    if (splitDivisors(n).length > 0) return n;
+    if (hasChoiceMix(n)) return n;
   }
-  // Fallback: a known easy composite near the range.
-  const fallbacks = [4, 6, 8, 9, 10, 12, 14, 15, 16, 18, 20, 21, 22, 24, 25, 27, 28, 30];
+  const fallbacks = [8, 12, 16, 18, 20, 24, 27, 28, 30, 32, 36, 40, 42, 44, 45, 48, 50, 54, 56, 60, 63, 64, 72, 75, 80, 81, 84, 90, 96, 100, 108, 120];
   const inRange = fallbacks.filter((n) => n >= lo && n <= hi);
-  return rng.pick(inRange.length ? inRange : fallbacks);
+  if (inRange.length > 0) return rng.pick(inRange);
+  const above = fallbacks.find((n) => n >= lo);
+  return above ?? fallbacks[fallbacks.length - 1];
 }

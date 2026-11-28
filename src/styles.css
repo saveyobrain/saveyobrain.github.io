@@ -1315,6 +1315,88 @@ button {
   opacity: 0.72;
 }
 
+.game-root.look-up .lup-entry {
+  display: none;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.game-root.look-up .lup-entry.is-open {
+  display: grid;
+}
+
+.game-root.look-up .task-panel.lup-entry-mode .task-options {
+  display: none;
+}
+
+.game-root.look-up .lup-divisor {
+  min-height: 60px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 3px solid #2a4d6e;
+  border-radius: 16px;
+  background: #10243a;
+  color: #f2f7ff;
+  font: inherit;
+  font-size: clamp(1.4rem, 5vw, 1.9rem);
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+}
+
+.game-root.look-up .lup-divisor::-webkit-outer-spin-button,
+.game-root.look-up .lup-divisor::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.game-root.look-up .lup-divisor:focus {
+  outline: none;
+  border-color: #5ec8ff;
+}
+
+.game-root.look-up .lup-fire {
+  min-height: 60px;
+  min-width: 112px;
+  padding: 8px 18px;
+  border: 3px solid #2a4d6e;
+  border-radius: 16px;
+  background: #173552;
+  color: #f2f7ff;
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.game-root.look-up .lup-fire:hover:not(:disabled) {
+  border-color: #5ec8ff;
+  background: #1d4668;
+}
+
+.game-root.look-up .lup-fire:disabled,
+.game-root.look-up .lup-divisor:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.game-root.look-up .lup-entry.is-wrong .lup-divisor {
+  background: #3a1820;
+  border-color: #ff6b7a;
+}
+
+.game-root.look-up .lup-entry.is-correct .lup-divisor {
+  background: #163d2e;
+  border-color: #3dd68c;
+}
+
+.game-root.look-up .task-panel.shake .lup-entry {
+  animation: shake 0.35s ease;
+}
+
 .game-root.look-up .modal {
   background: rgba(2, 8, 18, 0.55);
 }

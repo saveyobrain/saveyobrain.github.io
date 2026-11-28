@@ -28,6 +28,14 @@ const DIFF_SCALE: Record<Exclude<Difficulty, "custom">, { speed: number; size: n
   hardcore: { speed: 1.4, size: 1.3, lives: 2 },
 };
 
+/**
+ * Easy, Normal, and Hard show four divisor buttons.
+ * Hardcore is an open number field; Fire and Enter submit it.
+ */
+export function answerMode(difficulty: Difficulty): "choices" | "entry" {
+  return difficulty === "hardcore" ? "entry" : "choices";
+}
+
 export function startingLives(difficulty: Difficulty): number {
   if (difficulty === "custom") return DIFF_SCALE.normal.lives;
   return DIFF_SCALE[difficulty].lives;
@@ -72,7 +80,9 @@ export function waveConfig(wave: number, difficulty: Difficulty): WaveConfig {
   const w = Math.max(1, Math.floor(wave));
   const scale = difficulty === "custom" ? DIFF_SCALE.normal : DIFF_SCALE[difficulty];
   const minValue = Math.min(4 + Math.floor((w - 1) * 1.5 * scale.size), 40);
-  const maxValue = Math.min(10 + Math.floor(w * 4 * scale.size), 120);
+  // Floor the ceiling so wave 1 already includes 8, 12, 16, 18, 20, and 24 —
+  // numbers with both a one-shot burn and a split that leaves shards.
+  const maxValue = Math.min(Math.max(24, 10 + Math.floor(w * 4 * scale.size)), 120);
   const count = Math.min(3 + Math.floor((w - 1) * 0.6), 8);
   // Slow early waves, but fast enough that horizon-edge spawns enter within ~1–2s.
   const speed = (0.38 + (w - 1) * 0.04) * scale.speed;

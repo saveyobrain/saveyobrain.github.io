@@ -107,6 +107,10 @@ export const en: Strings = {
       "Pick a proper divisor D of N (not 1, not N). A hit splits the rock into D pieces labeled N\u00f7D. Odd primes burn safely. Wrong picks ricochet. Shields and lives are numbered too: a proper divisor collects them.",
     controls:
       "Target: closest rock is auto-selected (tap a rock, shield, or life, or use arrows). Answer: keys 1-4 or tap. A correct divisor splits a rock or collects a shield or life. Menu: Esc.",
+    controlsEntry:
+      "Target: closest rock is auto-selected (tap a rock, shield, or life, or use arrows). Answer: type a divisor and press Fire or Enter. A correct divisor splits a rock or collects a shield or life. Menu: Esc.",
+    fire: "Fire",
+    divisorLabel: "Divisor",
     wave: (n) => `Wave ${n}`,
     score: (n) => `Score ${n}`,
     lives: (n, max) => `\u2764 ${n}/${max}`,
@@ -124,7 +128,7 @@ export const en: Strings = {
       easy: "Very slow falls. Lives refill toward three, and later waves let you hold more.",
       normal: "Steady falls, three lives. A correct divisor collects a shield or a life.",
       hard: "Faster falls, larger numbers. Misses hurt more often.",
-      hardcore: "Few lives, relentless waves. Stay sharp.",
+      hardcore: "Few lives, relentless waves. Type a divisor, then Fire or Enter.",
     },
   },
 };

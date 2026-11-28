@@ -5,7 +5,10 @@ import {
   applySplit,
   burnsHarmlessly,
   choiceOptions,
+  clearsWithoutShards,
+  hasChoiceMix,
   isValidSplit,
+  leavesShards,
   pickComposite,
   splitDivisors,
 } from "../src/games/look-up/math";
@@ -59,23 +62,46 @@ describe("look-up math", () => {
     }
   });
 
-  it("builds 4-choice options without 1 or N, including real divisors", () => {
-    const rng = createRng(42);
-    const opts = choiceOptions(12, 4, rng);
-    expect(opts).toHaveLength(4);
-    expect(opts.includes(1)).toBe(false);
-    expect(opts.includes(12)).toBe(false);
-    for (const d of splitDivisors(12)) expect(opts.includes(d)).toBe(true);
+  it("builds four choices: one clean break, one or two shard splits, the rest wrong", () => {
+    const numbers = [8, 12, 16, 18, 20, 24, 27, 30, 36, 45, 48, 60, 100];
+    const shardCounts = new Set<number>();
+    for (const n of numbers) {
+      expect(hasChoiceMix(n)).toBe(true);
+      for (let seed = 1; seed <= 24; seed++) {
+        const opts = choiceOptions(n, 4, createRng(seed));
+        expect(opts).toHaveLength(4);
+        expect(new Set(opts).size).toBe(4);
+        expect(opts.includes(1)).toBe(false);
+        expect(opts.includes(n)).toBe(false);
+        const clean = opts.filter((d) => clearsWithoutShards(n, d));
+        const shards = opts.filter((d) => leavesShards(n, d));
+        const wrong = opts.filter((d) => !isValidSplit(n, d));
+        expect(clean).toHaveLength(1);
+        expect(shards.length === 1 || shards.length === 2).toBe(true);
+        expect(wrong).toHaveLength(4 - clean.length - shards.length);
+        expect(clean.length + shards.length + wrong.length).toBe(4);
+        shardCounts.add(shards.length);
+      }
+    }
+    expect(shardCounts.has(1)).toBe(true);
+    expect(shardCounts.has(2)).toBe(true);
 
-    const primeOpts = choiceOptions(7, 4, rng);
+    const primeOpts = choiceOptions(7, 4, createRng(1));
     expect(primeOpts).toEqual([]);
   });
 
-  it("picks composites that can still be split", () => {
+  it("fills a semiprime with one clean break and wrong answers", () => {
+    const opts = choiceOptions(15, 4, createRng(3));
+    expect(opts.filter((d) => clearsWithoutShards(15, d))).toHaveLength(1);
+    expect(opts.filter((d) => leavesShards(15, d))).toHaveLength(0);
+    expect(opts.filter((d) => !isValidSplit(15, d))).toHaveLength(3);
+  });
+
+  it("picks numbers that have a clean break and a shard split", () => {
     const rng = createRng(7);
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
       const n = pickComposite(rng, 4, 40);
-      expect(splitDivisors(n).length).toBeGreaterThan(0);
+      expect(hasChoiceMix(n)).toBe(true);
       expect(n).toBeGreaterThanOrEqual(4);
       expect(n).toBeLessThanOrEqual(40);
     }
